@@ -110,7 +110,49 @@ function render(){if(!ready)return;renderWarCouncil();let q=$('search').value.to
 function renderWarCouncil() {
   const container = $('warCouncilContent');
   if (!container || !ready) return;
+const mutualFavorites = shared
+  .filter(p => (p.decision || 'Active') === 'Active')
+  .filter(p => {
+    const richRank = rankOf(
+      me.uid === OWNER ? mine : other, p.id
+    );
+    const tiffanyRank = rankOf(
+      me.uid === OWNER ? other : mine, p.id
+    );
 
+    return richRank !== null && richRank <= 5 &&
+           tiffanyRank !== null && tiffanyRank <= 5;
+  });
+
+const favoritesHTML = `
+  <section style="margin:24px 0">
+    <div class="sectionbar">
+      <h2>❤️ Mutual Favorites</h2>
+      <span class="small">${mutualFavorites.length} properties</span>
+    </div>
+    <p class="small">
+      Properties ranked in both Rich and Tiffany's Top 5.
+    </p>
+    ${mutualFavorites.map(p => `
+      <div class="card" style="padding:15px;margin-bottom:10px">
+        <h3>${esc(p.address)}</h3>
+        <div class="city">${esc(p.city)}, Texas</div>
+        <div class="price">${money(p.price)}</div>
+        <div class="facts">
+          <span>🌲 ${fmt(p.acres)} acres</span>
+          <span>Rich: #${rankOf(me.uid === OWNER ? mine : other, p.id)}</span>
+          <span>Tiffany: #${rankOf(me.uid === OWNER ? other : mine, p.id)}</span>
+        </div>
+        <div class="actionline">
+          <a class="btn" href="${esc(p.url || '#')}"
+             target="_blank" rel="noopener noreferrer">
+            View Listing
+          </a>
+        </div>
+      </div>
+    `).join('') || '<p class="small">No mutual favorites yet.</p>'}
+  </section>
+`;
   const tiers = [
     ['S Tier', '🏆', 'Elite Contenders'],
     ['A Tier', '⚔️', 'Strong Contenders'],
@@ -123,7 +165,7 @@ function renderWarCouncil() {
     p => (p.decision || 'Active') === 'Active'
   );
 
-  container.innerHTML = tiers.map(([tier, icon, description]) => {
+  container.innerHTML = favoritesHTML + tiers.map(([tier, icon, description]) => {
     const properties = activeProperties
       .filter(p => councilTier(p.id) === tier)
       .sort((a, b) =>

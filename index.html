@@ -26,20 +26,18 @@
 </section><div id="comparepanel" class="comparepanel"><div class="sectionbar"><h2>Side-by-side comparison</h2><button class="btn" id="clear">Clear</button></div><div class="scroll" id="comparison"></div></div><div class="sectionbar"><h2>Properties</h2><span class="small" id="count"></span></div><div class="grid" id="cards"></div><p class="footer">Keep occasional JSON backups. Changes require an active internet connection. Do not upload an old backup to overwrite newer cloud records.</p></main><script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import {   getFirestore,   doc,   getDoc,   setDoc,   onSnapshot,   runTransaction,   serverTimestamp,   collection,   query,   getDocs,   addDoc,   updateDoc,   deleteDoc,   orderBy } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';,doc,getDoc,setDoc,onSnapshot,runTransaction,serverTimestamp,collection,query,getDocs} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {getFirestore,doc,getDoc,setDoc,onSnapshot,runTransaction,serverTimestamp,collection,query,addDoc,updateDoc,deleteDoc,orderBy} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 const config={apiKey:'AIzaSyBCHC3qCtpt9EG1V6aKEEyKRcZflzRCUXo',authDomain:'hill-country-homestead-hq.firebaseapp.com',projectId:'hill-country-homestead-hq',storageBucket:'hill-country-homestead-hq.firebasestorage.app',messagingSenderId:'548679088041',appId:'1:548679088041:web:66cad907aa709fae2136b8'};
 const OWNER='3fg19ltS3YUGwkOeQxmHefJKNpz2', app=initializeApp(config), auth=getAuth(app), db=getFirestore(app);
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl=u=>{try{let x=new URL(String(u||''),location.href);return ['https:','http:'].includes(x.protocol)?esc(x.href):'#'}catch{return '#'}};
 const money=n=>n==null?'Unknown':'$'+Math.round(n).toLocaleString(),fmt=n=>n==null?'—':Number(n).toLocaleString();
-let me=null,shared=[]
-  // Research discussion state
+let me=null,shared=[],mine={},other={},partnerUid=null,member={},chosen=new Set(),unsubs=[],ready=false,saveBusy=false,saveTimer=null,dirtyShared=false,dirtyMine=false;
 let researchComments = {};
-let researchCommentListeners = {};,mine={},other={},partnerUid=null,member={},chosen=new Set(),unsubs=[],ready=false,saveBusy=false,saveTimer=null,dirtyShared=false,dirtyMine=false;
+let researchCommentListeners = {};
 const sharedRef=doc(db,'shared','dashboard'),legacyRef=doc(db,'users',OWNER,'dashboard','main');
-const personalRef=uid=>
-  // Research discussions are stored separately from property records.
-const researchCommentsRef = propertyId =>
-  collection(db, 'researchComments', propertyId, 'comments');doc(db,'personal',uid),memberRef=uid=>doc(db,'members',uid),requestRef=uid=>doc(db,'requests',uid);
+const personalRef=uid=>doc(db,'personal',uid),memberRef=uid=>doc(db,'members',uid),requestRef=uid=>doc(db,'requests',uid);
+const researchCommentsRef=propertyId=>collection(db,'researchComments',propertyId,'comments');
 const rankOf=(obj,id)=>{let n=obj?.ranks?.[id];return Number.isInteger(n)&&n>0?n:null};
 const notesOf=(obj,id)=>obj?.notes?.[id]||'';
 const priority=p=>(p.groups||[]).includes('Serious inquiry')?0:(p.groups||[]).includes('Favorite')?1:2;
@@ -73,7 +71,7 @@ function status(s,error=false){$('backupstatus').textContent=s;$('backupstatus')
 function gate(text,buttons=''){$('cloudgate').style.display='flex';$('gateMessage').textContent=text;$('gateActions').innerHTML=buttons}
 function open(){ $('cloudgate').style.display='none'; }
 function listen(ref,callback){unsubs.push(onSnapshot(ref,callback,e=>status('Sync error: '+e.message,true)))}
-function cleanup(){unsubs.forEach(f=>f());unsubs=[];ready=false;me=null;shared=[];mine={};other={};partnerUid=null;dirtyShared=false;dirtyMine=false;clearTimeout(saveTimer)}
+function cleanup(){unsubs.forEach(f=>f());unsubs=[];Object.values(researchCommentListeners).forEach(f=>f());researchCommentListeners={};researchComments={};ready=false;me=null;shared=[];mine={};other={};partnerUid=null;dirtyShared=false;dirtyMine=false;clearTimeout(saveTimer)}
 function queue(kind){if(!ready)return; if(kind==='shared')dirtyShared=true;else dirtyMine=true;status('Saving changes…');clearTimeout(saveTimer);saveTimer=setTimeout(flush,650)}
 async function flush(){if(saveBusy||!ready)return;saveBusy=true;let writeShared=dirtyShared,writeMine=dirtyMine;dirtyShared=false;dirtyMine=false;try{
  if(writeShared){let snapshot=JSON.parse(JSON.stringify(shared));await setDoc(sharedRef,{properties:snapshot,updatedAt:new Date().toISOString()});}
@@ -85,22 +83,7 @@ async function requestAccess(user){try{await setDoc(requestRef(user.uid),{uid:us
 async function approve(uid){if(!confirm('Approve this Google account to access the shared homestead dashboard?'))return;try{await setDoc(memberRef(uid),{active:true,role:'member',approvedAt:serverTimestamp(),approvedBy:OWNER});alert('Approved. Tiffany can refresh or sign in now.')}catch(e){alert(e.message)}}
 async function showAdmin(){if(me.uid!==OWNER)return;let box=$('admin');box.classList.remove('hidden');box.innerHTML='<b>Owner tools</b><div class="small">Approve pending Google accounts below. Only approve Tiffany’s account after confirming her email.</div><div id="pending">Loading requests…</div><button class="btn" id="migrate">One-time migration from existing dashboard</button><p class="small">Migration copies existing shared properties and your notes only if the new database is empty. Both rankings start blank. Your old database is never deleted.</p>';
  $('migrate').onclick=migrate;
- listen(query(collection(db,'requests')),snap=>{let pending=[...snap.docs].map(d=>({uid:d.id,...d.data()}));$('pending').innerHTML=pending.length?pending.map(r=>`
- <div class="personalnotes">
-  <h4>💬 Research Discussion</h4>
-  <div id="research-comments-${esc(p.id)}">
-    <p class="small">Loading comments…</p>
-  </div>
-  <textarea
-    id="research-input-${esc(p.id)}"
-    placeholder="Add a research comment…"
-    style="width:100%;min-height:75px">
-  </textarea>
-  <button class="btn" data-post-comment="${esc(p.id)}">
-    Post Comment
-  </button>
-</div>
-<div class="actionline"><span>${esc(r.name)} · ${esc(r.email)} · <code>${esc(r.uid)}</code></span><button class="btn" data-approve="${esc(r.uid)}">Approve</button></div>`).join(''):'<p class="small">No pending requests yet.</p>';box.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>approve(b.dataset.approve))});
+ listen(query(collection(db,'requests')),snap=>{let pending=[...snap.docs].map(d=>({uid:d.id,...d.data()}));$('pending').innerHTML=pending.length?pending.map(r=>`<div class="actionline"><span>${esc(r.name)} · ${esc(r.email)} · <code>${esc(r.uid)}</code></span><button class="btn" data-approve="${esc(r.uid)}">Approve</button></div>`).join(''):'<p class="small">No pending requests yet.</p>';box.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>approve(b.dataset.approve))});
 }
 async function migrate(){if(!confirm('Migrate from the OLD dashboard into Version 2? This only works if Version 2 shared data does not already exist. Existing notes are preserved and both rank lists start blank.'))return;
  try{let old=await getDoc(legacyRef);if(!old.exists())throw Error('Old dashboard data not found.');let props=old.data().properties;if(!Array.isArray(props))throw Error('Old dashboard format is unexpected.');
@@ -127,7 +110,7 @@ function render(){if(!ready)return;renderWarCouncil();let q=$('search').value.to
  let active=shared.filter(p=>(p.decision||'Active')==='Active');$('total').textContent=active.length;$('serious').textContent=active.filter(p=>(p.groups||[]).includes('Serious inquiry')).length;$('fresh').textContent=active.filter(p=>(p.groups||[]).includes('New discovery')).length;$('land').textContent=active.filter(p=>p.acres>=10).length;$('count').textContent=list.length+' showing · '+shared.filter(p=>p.decision==='Rejected').length+' archived';
  $('cards').innerHTML=list.length?list.map(p=>{let r=rankOf(mine,p.id),o=rankOf(other,p.id),c=combined(p.id),ms=matchStats(p);return `<article class="card"><div class="art">${p.photoUrl?`<img class="propertyphoto" src="${esc(p.photoUrl)}" alt="Property" loading="lazy" onerror="this.style.display='none'">`:''}</div><div class="cardmain"><div class="scorerow"><span class="gradeflag">Documented: ${ms.pts}/225 · ${ms.pct.toFixed(1)}% · ${ms.known}/45 categories</span></div><div class="rankgrid"><div class="rankbox">Rich<strong>${me.uid===OWNER?(r?'#'+r:'—'):(o?'#'+o:'—')}</strong></div><div class="rankbox">Tiffany<strong>${me.uid===OWNER?(o?'#'+o:'—'):(r?'#'+r:'—')}</strong></div><div class="rankbox">Combined<strong>${c===null?'—':'#'+c.toFixed(1)}</strong></div></div><div class="rankrow"><label for="rank-${esc(p.id)}">My rank</label><input id="rank-${esc(p.id)}" class="rankinput" data-rank="${esc(p.id)}" type="number" min="1" max="${shared.length}" value="${r??''}" placeholder="Unranked"><button class="btn rankbtn" data-unrank="${esc(p.id)}">Clear</button></div><div class="topline">${(p.groups||[]).filter(x=>x!=='Watchlist').map(x=>`<span class="tag">${esc(x)}</span>`).join('')}<span class="statuspill ${p.decision==='Rejected'?'rejected':''}">${esc(p.decision||'Active')}</span></div><h3>${esc(p.address)}</h3><div class="city">${esc(p.city)}, Texas · ${esc(p.status||'Unknown')}</div><div class="price">${money(p.price)}</div><div class="facts"><span>🌲 ${fmt(p.acres)} ac</span><span>⌂ ${fmt(p.beds)} bd / ${fmt(p.baths)} ba</span><span>${fmt(p.sqft)} sq ft</span></div>${p.features?.length?`<p class="note">${p.features.map(esc).join(' · ')}</p>`:''}${p.notes?`<p class="note">${esc(p.notes)}</p>`:''}${p.risk?`<p class="risk">⚑ ${esc(p.risk)}</p>`:''}${p.decisionReason?`<p class="reason">Shared decision: ${esc(p.decisionReason)}</p>`:''}<details class="gradeinfo"><summary>Grading evidence</summary>${(p.gradeEvidence||[]).map(e=>`<div>${esc(e.group)}: ${esc(e.option)} +${Number(e.points)||0}</div>`).join('')}</details><div class="notesgrid"><div><label>My personal notes (editable)</label><textarea data-notes="${esc(p.id)}" placeholder="Your impressions, visit notes, questions…">${esc(notesOf(mine,p.id))}</textarea></div><div><label>${me.uid===OWNER?'Tiffany':'Rich'}'s notes (read only)</label><textarea readonly>${esc(notesOf(other,p.id))}</textarea></div></div><div class="actionline">${p.decision==='Active'?`<button class="btn" data-decision="On Hold" data-id="${esc(p.id)}">On hold</button><button class="btn archive" data-decision="Rejected" data-id="${esc(p.id)}">Reject / archive</button>`:`<button class="btn" data-decision="Active" data-id="${esc(p.id)}">Restore to active</button>`}<button class="btn" data-research="${esc(p.id)}">
   ${p.deepResearch ? '🔎 Remove Research Flag' : '🔎 Deep Research'}
-</button><button class="btn" data-photo="${esc(p.id)}">Set photo URL</button></div></div><div class="cardfoot"><label class="small"><input class="compare" type="checkbox" data-id="${esc(p.id)}" ${chosen.has(p.id)?'checked':''}> Compare</label><a href="${esc(p.url||'#')}" target="_blank" rel="noopener noreferrer">Original listing ↗</a></div></article>`}).join(''):'<div class="empty">No properties match these filters.</div>';
+</button><button class="btn" data-photo="${esc(p.id)}">Set photo URL</button></div></div><div class="cardfoot"><label class="small"><input class="compare" type="checkbox" data-id="${esc(p.id)}" ${chosen.has(p.id)?'checked':''}> Compare</label><a href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer">Original listing ↗</a></div></article>`}).join(''):'<div class="empty">No properties match these filters.</div>';
  document.querySelectorAll('[data-rank]').forEach(el=>el.onchange=()=>setRank(el.dataset.rank,el.value));document.querySelectorAll('[data-unrank]').forEach(el=>el.onclick=()=>setRank(el.dataset.unrank,''));document.querySelectorAll('[data-notes]').forEach(el=>el.oninput=()=>setNotes(el.dataset.notes,el.value));document.querySelectorAll('[data-decision]').forEach(el=>el.onclick=()=>setDecision(el.dataset.id,el.dataset.decision));document.querySelectorAll('[data-research]').forEach(el => {
   el.onclick = () => {
     const p = shared.find(x => x.id === el.dataset.research);
@@ -164,41 +147,60 @@ function listenToResearchComments(propertyId) {
   );
 } 
   function renderResearchComments(propertyId) {
-  const container = document.getElementById(
-    'research-comments-' + propertyId
-  );
-  if (!container) return;
-
+  const container = $('research-comments-' + propertyId);
+  if (!container || !me) return;
   const comments = researchComments[propertyId] || [];
-
-  container.innerHTML = comments.length
-    ? comments.map(c => {
-        const mine = c.authorUid === me.uid;
-        const date = c.createdAt?.toDate
-          ? c.createdAt.toDate().toLocaleString()
-          : 'Just posted';
-
-        return `
-          <div class="personalnotes">
-            <strong>${esc(c.authorName)}</strong>
-            <span class="small">${esc(date)}</span>
-            ${c.updatedAt?.toMillis?.() !== c.createdAt?.toMillis?.()
-              ? '<span class="small"> · Edited</span>'
-              : ''}
-            <p>${esc(c.text)}</p>
-            ${mine ? `
-              <button class="btn"
-                data-edit-comment="${esc(c.id)}"
-                data-property="${esc(propertyId)}">Edit</button>
-              <button class="btn archive"
-                data-delete-comment="${esc(c.id)}"
-                data-property="${esc(propertyId)}">Delete</button>
-            ` : ''}
-          </div>
-        `;
-      }).join('')
-    : '<p class="small">No research comments yet.</p>';
+  container.innerHTML = comments.length ? comments.map(c => {
+    const authored = c.authorUid === me.uid;
+    const created = c.createdAt?.toDate?.();
+    const edited = c.updatedAt?.toMillis?.() > c.createdAt?.toMillis?.();
+    return `<div class="research-comment">
+      <div><strong>${esc(c.authorName || 'Member')}</strong> <span class="small">${created ? esc(created.toLocaleString()) : 'Just posted'}${edited ? ' · Edited' : ''}</span></div>
+      <p style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(c.text)}</p>
+      ${authored ? `<div class="actionline"><button class="btn" type="button" data-edit-comment="${esc(c.id)}" data-property="${esc(propertyId)}">Edit</button><button class="btn archive" type="button" data-delete-comment="${esc(c.id)}" data-property="${esc(propertyId)}">Delete</button></div>` : ''}
+    </div>`;
+  }).join('') : '<p class="small">No research comments yet.</p>';
 }
+async function postResearchComment(propertyId, button) {
+  const input = $('research-input-' + propertyId);
+  const message = input?.value.trim();
+  if (!ready || !me || !input || !message || message.length > 5000) return;
+  button.disabled = true;
+  try {
+    await addDoc(researchCommentsRef(propertyId), {
+      authorUid: me.uid,
+      authorName: me.uid === OWNER ? 'Rich' : 'Tiffany',
+      text: message,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    input.value = '';
+  } catch(e) { alert('Could not post comment: ' + e.message); }
+  finally { button.disabled = false; }
+}
+async function editResearchComment(propertyId, commentId) {
+  const comment = (researchComments[propertyId] || []).find(c => c.id === commentId);
+  if (!comment || comment.authorUid !== me?.uid) return;
+  const value = prompt('Edit your research comment:', comment.text);
+  if (value === null || value === comment.text) return;
+  const text = value.trim();
+  if (!text || text.length > 5000) { alert('Comment must be between 1 and 5000 characters.'); return; }
+  try { await updateDoc(doc(researchCommentsRef(propertyId), commentId), {text,updatedAt:serverTimestamp()}); }
+  catch(e) { alert('Could not edit comment: ' + e.message); }
+}
+async function deleteResearchComment(propertyId, commentId) {
+  const comment = (researchComments[propertyId] || []).find(c => c.id === commentId);
+  if (!comment || comment.authorUid !== me?.uid || !confirm('Delete your comment permanently?')) return;
+  try { await deleteDoc(doc(researchCommentsRef(propertyId), commentId)); }
+  catch(e) { alert('Could not delete comment: ' + e.message); }
+}
+$('warCouncilContent').addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  if (button.dataset.postComment) postResearchComment(button.dataset.postComment, button);
+  else if (button.dataset.editComment) editResearchComment(button.dataset.property, button.dataset.editComment);
+  else if (button.dataset.deleteComment) deleteResearchComment(button.dataset.property, button.dataset.deleteComment);
+});
 function renderWarCouncil() {
   const container = $('warCouncilContent');
   if (!container || !ready) return;
@@ -236,7 +238,7 @@ const favoritesHTML = `
           <span>Tiffany: #${rankOf(me.uid === OWNER ? other : mine, p.id)}</span>
         </div>
         <div class="actionline">
-          <a class="btn" href="${esc(p.url || '#')}"
+          <a class="btn" href="${safeUrl(p.url)}"
              target="_blank" rel="noopener noreferrer">
             View Listing
           </a>
@@ -267,8 +269,15 @@ const researchHTML = `
         <div class="facts">
           <span>🌲 ${fmt(p.acres)} acres</span>
         </div>
+        <div class="personalnotes research-discussion">
+          <h4>💬 Research Discussion</h4>
+          <div id="research-comments-${esc(p.id)}"><p class="small">Loading comments…</p></div>
+          <label for="research-input-${esc(p.id)}">New comment</label>
+          <textarea id="research-input-${esc(p.id)}" placeholder="Questions, findings, follow-ups…" maxlength="5000"></textarea>
+          <button class="btn" type="button" data-post-comment="${esc(p.id)}">Post Comment</button>
+        </div>
         <div class="actionline">
-          <a class="btn" href="${esc(p.url || '#')}"
+          <a class="btn" href="${safeUrl(p.url)}"
              target="_blank" rel="noopener noreferrer">
             View Listing
           </a>
@@ -317,7 +326,7 @@ const researchHTML = `
             <span>Tiffany: ${tiffanyRank === null ? '—' : '#' + tiffanyRank}</span>
           </div>
           <div class="actionline">
-            <a class="btn" href="${esc(p.url || '#')}"
+            <a class="btn" href="${safeUrl(p.url)}"
                target="_blank" rel="noopener noreferrer">
               View Listing
             </a>
@@ -337,6 +346,10 @@ const researchHTML = `
       </section>
     `;
   }).join('');
+  const activeResearchIds = new Set(researchProperties.map(p => p.id));
+  for (const [id, unsubscribe] of Object.entries(researchCommentListeners)) {
+    if (!activeResearchIds.has(id)) { unsubscribe(); delete researchCommentListeners[id]; }
+  }
   researchProperties.forEach(p => {
     listenToResearchComments(p.id);
     renderResearchComments(p.id);

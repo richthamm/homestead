@@ -85,7 +85,22 @@ async function requestAccess(user){try{await setDoc(requestRef(user.uid),{uid:us
 async function approve(uid){if(!confirm('Approve this Google account to access the shared homestead dashboard?'))return;try{await setDoc(memberRef(uid),{active:true,role:'member',approvedAt:serverTimestamp(),approvedBy:OWNER});alert('Approved. Tiffany can refresh or sign in now.')}catch(e){alert(e.message)}}
 async function showAdmin(){if(me.uid!==OWNER)return;let box=$('admin');box.classList.remove('hidden');box.innerHTML='<b>Owner tools</b><div class="small">Approve pending Google accounts below. Only approve Tiffany’s account after confirming her email.</div><div id="pending">Loading requests…</div><button class="btn" id="migrate">One-time migration from existing dashboard</button><p class="small">Migration copies existing shared properties and your notes only if the new database is empty. Both rankings start blank. Your old database is never deleted.</p>';
  $('migrate').onclick=migrate;
- listen(query(collection(db,'requests')),snap=>{let pending=[...snap.docs].map(d=>({uid:d.id,...d.data()}));$('pending').innerHTML=pending.length?pending.map(r=>`<div class="actionline"><span>${esc(r.name)} · ${esc(r.email)} · <code>${esc(r.uid)}</code></span><button class="btn" data-approve="${esc(r.uid)}">Approve</button></div>`).join(''):'<p class="small">No pending requests yet.</p>';box.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>approve(b.dataset.approve))});
+ listen(query(collection(db,'requests')),snap=>{let pending=[...snap.docs].map(d=>({uid:d.id,...d.data()}));$('pending').innerHTML=pending.length?pending.map(r=>`
+ <div class="personalnotes">
+  <h4>💬 Research Discussion</h4>
+  <div id="research-comments-${esc(p.id)}">
+    <p class="small">Loading comments…</p>
+  </div>
+  <textarea
+    id="research-input-${esc(p.id)}"
+    placeholder="Add a research comment…"
+    style="width:100%;min-height:75px">
+  </textarea>
+  <button class="btn" data-post-comment="${esc(p.id)}">
+    Post Comment
+  </button>
+</div>
+<div class="actionline"><span>${esc(r.name)} · ${esc(r.email)} · <code>${esc(r.uid)}</code></span><button class="btn" data-approve="${esc(r.uid)}">Approve</button></div>`).join(''):'<p class="small">No pending requests yet.</p>';box.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>approve(b.dataset.approve))});
 }
 async function migrate(){if(!confirm('Migrate from the OLD dashboard into Version 2? This only works if Version 2 shared data does not already exist. Existing notes are preserved and both rank lists start blank.'))return;
  try{let old=await getDoc(legacyRef);if(!old.exists())throw Error('Old dashboard data not found.');let props=old.data().properties;if(!Array.isArray(props))throw Error('Old dashboard format is unexpected.');
@@ -124,7 +139,66 @@ function render(){if(!ready)return;renderWarCouncil();let q=$('search').value.to
     render();
   };
 });document.querySelectorAll('[data-photo]').forEach(el=>el.onclick=()=>{let p=shared.find(x=>x.id===el.dataset.photo);let v=prompt('Direct permitted image URL (leave blank to remove):',p.photoUrl||'');if(v!==null){p.photoUrl=v.trim();queue('shared');render()}});document.querySelectorAll('.compare').forEach(el=>el.onchange=()=>{if(el.checked){if(chosen.size>=4){el.checked=false;alert('Compare up to 4 properties.');return}chosen.add(el.dataset.id)}else chosen.delete(el.dataset.id);compare()});compare()}
- 
+function listenToResearchComments(propertyId) {
+  if (!ready || !me || researchCommentListeners[propertyId]) return;
+
+  const commentsQuery = query(
+    researchCommentsRef(propertyId),
+    orderBy('createdAt', 'asc')
+  );
+
+  researchCommentListeners[propertyId] = onSnapshot(
+    commentsQuery,
+    snapshot => {
+      researchComments[propertyId] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      renderResearchComments(propertyId);
+    },
+    error => {
+      console.error('Research comments sync failed:', error);
+      status('Research comments sync error: ' + error.message, true);
+    }
+  );
+} 
+  function renderResearchComments(propertyId) {
+  const container = document.getElementById(
+    'research-comments-' + propertyId
+  );
+  if (!container) return;
+
+  const comments = researchComments[propertyId] || [];
+
+  container.innerHTML = comments.length
+    ? comments.map(c => {
+        const mine = c.authorUid === me.uid;
+        const date = c.createdAt?.toDate
+          ? c.createdAt.toDate().toLocaleString()
+          : 'Just posted';
+
+        return `
+          <div class="personalnotes">
+            <strong>${esc(c.authorName)}</strong>
+            <span class="small">${esc(date)}</span>
+            ${c.updatedAt?.toMillis?.() !== c.createdAt?.toMillis?.()
+              ? '<span class="small"> · Edited</span>'
+              : ''}
+            <p>${esc(c.text)}</p>
+            ${mine ? `
+              <button class="btn"
+                data-edit-comment="${esc(c.id)}"
+                data-property="${esc(propertyId)}">Edit</button>
+              <button class="btn archive"
+                data-delete-comment="${esc(c.id)}"
+                data-property="${esc(propertyId)}">Delete</button>
+            ` : ''}
+          </div>
+        `;
+      }).join('')
+    : '<p class="small">No research comments yet.</p>';
+}
 function renderWarCouncil() {
   const container = $('warCouncilContent');
   if (!container || !ready) return;
@@ -263,7 +337,10 @@ const researchHTML = `
       </section>
     `;
   }).join('');
-}
+  researchProperties.forEach(p => {
+    listenToResearchComments(p.id);
+    renderResearchComments(p.id);
+  });}
 
 function compare(){let arr=shared.filter(p=>chosen.has(p.id));$('comparepanel').style.display=arr.length?'block':'none';if(!arr.length)return;let rows=[['Address',p=>p.address+', '+p.city],['Price',p=>money(p.price)],['Acreage',p=>fmt(p.acres)],['Rich rank',p=>me.uid===OWNER?rankOf(mine,p.id)??'—':rankOf(other,p.id)??'—'],['Tiffany rank',p=>me.uid===OWNER?rankOf(other,p.id)??'—':rankOf(mine,p.id)??'—'],['Combined',p=>combined(p.id)??'—'],['Documented score',p=>matchStats(p).pts+'/225'],['Rich notes',p=>me.uid===OWNER?notesOf(mine,p.id):notesOf(other,p.id)],['Tiffany notes',p=>me.uid===OWNER?notesOf(other,p.id):notesOf(mine,p.id)],['Risks',p=>p.risk||'—']];$('comparison').innerHTML='<table class="comparetable"><tbody>'+rows.map(([name,fn])=>'<tr><th>'+esc(name)+'</th>'+arr.map(p=>'<td>'+esc(fn(p))+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
 for(let id of ['search','group','sort','rankfilter','acre','decisionfilter'])$(id).addEventListener(id==='search'?'input':'change',render);

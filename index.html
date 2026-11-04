@@ -26,14 +26,20 @@
 </section><div id="comparepanel" class="comparepanel"><div class="sectionbar"><h2>Side-by-side comparison</h2><button class="btn" id="clear">Clear</button></div><div class="scroll" id="comparison"></div></div><div class="sectionbar"><h2>Properties</h2><span class="small" id="count"></span></div><div class="grid" id="cards"></div><p class="footer">Keep occasional JSON backups. Changes require an active internet connection. Do not upload an old backup to overwrite newer cloud records.</p></main><script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import {getFirestore,doc,getDoc,setDoc,onSnapshot,runTransaction,serverTimestamp,collection,query,getDocs} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {   getFirestore,   doc,   getDoc,   setDoc,   onSnapshot,   runTransaction,   serverTimestamp,   collection,   query,   getDocs,   addDoc,   updateDoc,   deleteDoc,   orderBy } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';,doc,getDoc,setDoc,onSnapshot,runTransaction,serverTimestamp,collection,query,getDocs} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 const config={apiKey:'AIzaSyBCHC3qCtpt9EG1V6aKEEyKRcZflzRCUXo',authDomain:'hill-country-homestead-hq.firebaseapp.com',projectId:'hill-country-homestead-hq',storageBucket:'hill-country-homestead-hq.firebasestorage.app',messagingSenderId:'548679088041',appId:'1:548679088041:web:66cad907aa709fae2136b8'};
 const OWNER='3fg19ltS3YUGwkOeQxmHefJKNpz2', app=initializeApp(config), auth=getAuth(app), db=getFirestore(app);
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>n==null?'Unknown':'$'+Math.round(n).toLocaleString(),fmt=n=>n==null?'—':Number(n).toLocaleString();
-let me=null,shared=[],mine={},other={},partnerUid=null,member={},chosen=new Set(),unsubs=[],ready=false,saveBusy=false,saveTimer=null,dirtyShared=false,dirtyMine=false;
+let me=null,shared=[]
+  // Research discussion state
+let researchComments = {};
+let researchCommentListeners = {};,mine={},other={},partnerUid=null,member={},chosen=new Set(),unsubs=[],ready=false,saveBusy=false,saveTimer=null,dirtyShared=false,dirtyMine=false;
 const sharedRef=doc(db,'shared','dashboard'),legacyRef=doc(db,'users',OWNER,'dashboard','main');
-const personalRef=uid=>doc(db,'personal',uid),memberRef=uid=>doc(db,'members',uid),requestRef=uid=>doc(db,'requests',uid);
+const personalRef=uid=>
+  // Research discussions are stored separately from property records.
+const researchCommentsRef = propertyId =>
+  collection(db, 'researchComments', propertyId, 'comments');doc(db,'personal',uid),memberRef=uid=>doc(db,'members',uid),requestRef=uid=>doc(db,'requests',uid);
 const rankOf=(obj,id)=>{let n=obj?.ranks?.[id];return Number.isInteger(n)&&n>0?n:null};
 const notesOf=(obj,id)=>obj?.notes?.[id]||'';
 const priority=p=>(p.groups||[]).includes('Serious inquiry')?0:(p.groups||[]).includes('Favorite')?1:2;

@@ -265,7 +265,7 @@
   <div class="toolbar hq-filter-toolbar"><input id="search" placeholder="Search address, town, features, notes…"><select id="group"><option value="all">All collections</option><option value="Serious inquiry">Serious inquiries</option><option value="Favorite">Favorites</option><option value="New discovery">New discoveries</option><option value="Watchlist">Watchlist</option></select><select id="sort"><option value="priority">Priority / discovery</option><option value="mine">My rankings</option><option value="other">Partner's rankings</option><option value="combined">Combined rankings</option><option value="grade">Overall match %</option><option value="priceasc">Price: low to high</option><option value="pricedesc">Price: high to low</option><option value="acres">Most acreage</option></select><select id="rankfilter"><option value="all">All ranking statuses</option><option value="mine-unranked">Unranked by me</option><option value="mine-ranked">Ranked by me</option><option value="other-unranked">Unranked by partner</option><option value="other-ranked">Ranked by partner</option><option value="both-ranked">Ranked by both</option></select><select id="acre"><option value="0">Any acreage</option><option value="5">5+ acres</option><option value="10">10+ acres</option><option value="20">20+ acres</option></select><select id="decisionfilter"><option value="tracking">Tracking (default)</option><option value="all">All decisions</option><option value="Active">Active</option><option value="On Hold">On hold</option><option value="Rejected">Rejected / archive</option></select></div>
 </div>
 
-<section id="propertyMapPage" class="hidden" aria-label="Lightweight regional property map"><div class="sectionbar"><h2>🗺️ Property Map</h2><button class="btn" id="closeMap" type="button">← Back to properties</button></div><div class="small">Interactive regional road map: zoom and drag to separate property markers. Nearby properties group into numbered clusters; click a cluster to zoom in. If the interactive map cannot load, HQ restores the previous static map. Coordinates are approximate, not legal boundaries.</div><div class="offline-map-legend"><span><i class="legend-dot watchlist"></i> Watchlist</span><span><i class="legend-dot favorite"></i> HQ Favorite</span><span><i class="legend-dot serious"></i> Serious Inquiry</span></div><div class="offline-map-toolbar"><button class="btn" id="offlineMapZoomOut" type="button" aria-label="Zoom out">−</button><button class="btn" id="offlineMapZoomIn" type="button" aria-label="Zoom in">＋</button><button class="btn" id="offlineMapReset" type="button">Show all properties</button><label class="map-boundary-toggle"><input id="mapBoundaryToggle" type="checkbox"> Show parcel boundaries</label><span class="small" id="offlineMapZoomLabel">100%</span></div><div id="propertyMapCanvas" class="offline-map-canvas" aria-label="Central Texas map with interactive property locations"></div><div id="offlineMapSelection" class="offline-map-selection small" aria-live="polite">Select a pin to see property details. Listing status describes market availability, not pin accuracy.</div><p id="mapNeedsLocation" class="small"></p><div id="mapLocationFallback" class="small" aria-live="polite"></div></section><section id="warCouncil" class="workspace-panel hidden" aria-label="War Council">
+<section id="propertyMapPage" class="hidden" aria-label="Lightweight regional property map"><div class="sectionbar"><h2>🗺️ Property Map</h2><button class="btn" id="closeMap" type="button">← Back to properties</button></div><div class="small">Interactive regional road map: zoom and drag to separate property markers. Nearby properties group into numbered clusters; click a cluster to zoom in. If the interactive map cannot load, HQ restores the previous static map. Coordinates are approximate, not legal boundaries.</div><div class="offline-map-legend"><span><i class="legend-dot watchlist"></i> Watchlist</span><span><i class="legend-dot favorite"></i> HQ Favorite</span><span><i class="legend-dot serious"></i> Serious Inquiry</span></div><div class="offline-map-toolbar"><button class="btn" id="offlineMapZoomOut" type="button" aria-label="Zoom out">−</button><button class="btn" id="offlineMapZoomIn" type="button" aria-label="Zoom in">＋</button><button class="btn" id="offlineMapReset" type="button">Show all properties</button><button class="btn primary" id="autoFindParcels" type="button">🔎 Auto-find missing parcels</button><label class="map-boundary-toggle"><input id="mapBoundaryToggle" type="checkbox"> Show parcel boundaries</label><span class="small" id="offlineMapZoomLabel">100%</span></div><div id="propertyMapCanvas" class="offline-map-canvas" aria-label="Central Texas map with interactive property locations"></div><div id="parcelBatchStatus" class="small" role="status" aria-live="polite"></div><div id="offlineMapSelection" class="offline-map-selection small" aria-live="polite">Select a pin to see property details. Listing status describes market availability, not pin accuracy.</div><p id="mapNeedsLocation" class="small"></p><div id="mapLocationFallback" class="small" aria-live="polite"></div></section><section id="warCouncil" class="workspace-panel hidden" aria-label="War Council">
   <div class="sectionbar">
     <h2>⚔️ The War Council</h2>
     <span class="small">Rich & Tiffany's combined rankings</span>
@@ -1081,31 +1081,75 @@ async function gisRequest(url){
  if(result?.error)throw Error((result.error.message||'ArcGIS error')+(result.error.details?.length?' — '+result.error.details.join('; '):''));
  return result;
 }
-async function findParcelCandidate(propertyId,output){
- const p=shared.find(x=>x.id===propertyId);if(!p)return;
+// Parcel matching must be deliberately conservative: a lone GIS hit near an
+// approximate listing pin is not, by itself, proof of parcel ownership.
+function parcelAutoCheck(p,feature,featureCount){
+ if(featureCount!==1)return {ok:false,reason:'Multiple parcel candidates need manual confirmation.'};
+ if(boundaryMatched(p))return {ok:false,reason:'A matched parcel is already saved.'};
+ const id=gisParcelId(feature.properties);
+ if(!id)return {ok:false,reason:'GIS record lacks a stable parcel identifier.'};
+ const acres=polygonAreaAcres(feature.geometry),listed=Number(p.acres);
+ if(!Number.isFinite(listed)||listed<=0)return {ok:false,reason:'Listing acreage is missing; confirm manually.'};
+ if(!Number.isFinite(acres)||acres<=0)return {ok:false,reason:'GIS acreage cannot be checked.'};
+ // The tolerance protects against accidentally linking a small house lot to a
+ // multi-parcel rural listing. A small absolute allowance covers GIS rounding.
+ const gap=Math.abs(acres-listed),tolerance=Math.max(0.35,listed*0.12);
+ if(gap>tolerance)return {ok:false,reason:'GIS acreage ('+acres.toFixed(2)+') differs from listing ('+listed+').'};
+ const situs=String(feature.properties?.situs_addr||'').trim();
+ const listingStreet=String(p.address||'').trim();
+ const listedNumber=listingStreet.match(/^\s*(\d+[A-Z]?)\b/i)?.[1];
+ const gisNumber=situs.match(/^\s*(\d+[A-Z]?)\b/i)?.[1];
+ if(listedNumber&&gisNumber&&listedNumber.toLowerCase()!==gisNumber.toLowerCase())return {ok:false,reason:'GIS situs address differs from the listing street number.'};
+ return {ok:true,id,acres};
+}
+function parcelFromCandidate(f,check,method){
+ return {type:f.geometry.type,coordinates:f.geometry.coordinates,source:TX_PARCELS_LAYER,
+  parcelId:check.id,matched:true,checkedAt:new Date().toISOString().slice(0,10),
+  matchMethod:method,gisAcres:Math.round(check.acres*100)/100};
+}
+async function lookupGISFeatures(p){
  const pos=mapCoords(p);
- if(!pos){output.textContent='This property has no usable coordinates. First research or enter an accurate parcel location; an address alone cannot safely identify the correct polygon.';return}
+ if(!pos)return {features:[],failures:[],reason:'Property location pin is missing.'};
  const [lat,lon]=pos;
- output.textContent='Searching Texas appraisal parcel GIS at the saved property pin…';
  const base={geometry:lon+','+lat,geometryType:'esriGeometryPoint',sr:'4326',inSR:'4326',outSR:'4326',spatialRel:'esriSpatialRelIntersects'};
  const query=new URLSearchParams({...base,f:'json',where:'1=1',outFields:'prop_id,geo_id,situs_addr,county,gis_area,gis_area_unit,legal_area,lgl_area_unit',returnGeometry:'true'});
  let result=null,failures=[];
  try{result=await gisRequest(TX_PARCELS_LAYER+'/query?'+query)}catch(err){failures.push('Parcel query: '+String(err.message||err))}
- // Some government ArcGIS deployments advertise Query but reject its execution.
- // Fall back to the MapServer Identify operation using a small envelope around the same pin.
+ // The Texas server sometimes rejects Query but accepts MapServer Identify.
  if(!gisResultFeatures(result).some(validParcelFeature)){
   const dx=.001,dy=.001;
   const identify=new URLSearchParams({f:'json',geometry:lon+','+lat,geometryType:'esriGeometryPoint',sr:'4326',layers:'all:0',tolerance:'4',mapExtent:[lon-dx,lat-dy,lon+dx,lat+dy].join(','),imageDisplay:'700,700,96',returnGeometry:'true',maxAllowableOffset:'0'});
   try{const identified=await gisRequest(TX_PARCELS_LAYER.replace(/\/0$/,'')+'/identify?'+identify);if(gisResultFeatures(identified).some(validParcelFeature))result=identified;else if(!result)result=identified}
   catch(err){failures.push('Map identification: '+String(err.message||err))}
  }
- const features=gisResultFeatures(result).filter(validParcelFeature).slice(0,8);
+ const features=gisResultFeatures(result).filter(validParcelFeature);
+ // Distinct parcel IDs / geometries avoid counting one parcel more than once.
+ const seen=new Set(),unique=[];
+ for(const f of features){const key=gisParcelId(f.properties)||JSON.stringify(f.geometry);if(seen.has(key))continue;seen.add(key);unique.push(f)}
+ return {features:unique.slice(0,8),failures};
+}
+async function findParcelCandidate(propertyId,output){
+ const p=shared.find(x=>x.id===propertyId);if(!p)return;
+ if(!mapCoords(p)){output.textContent='This property has no usable coordinates. First research or enter an accurate parcel location.';return}
+ output.textContent='Searching Texas appraisal parcel GIS at the saved property pin…';
+ let search;
+ try{search=await lookupGISFeatures(p)}catch(err){output.textContent='GIS lookup failed: '+String(err.message||err);return}
+ const {features,failures}=search;
  if(!features.length){
-  const msg=failures.length===2?'The Texas GIS server rejected both supported lookup methods. This is a service-side limitation or temporary outage, not proof that the property lacks parcel data. '+failures.join(' | '):'No matching parcel polygon was returned for the saved pin. The pin may be approximate or the parcel may not be included in this dataset.';
-  output.innerHTML=esc(msg)+' <a href="'+esc(TX_PARCELS_LAYER)+'" target="_blank" rel="noopener noreferrer">Open Texas parcel GIS ↗</a>';
-  return;
+  const msg=failures.length===2?'The Texas GIS server rejected both lookup methods. '+failures.join(' | '):'No parcel polygon was returned for this pin. The pin may be approximate or the dataset incomplete.';
+  output.innerHTML=esc(msg)+' <a href="'+esc(TX_PARCELS_LAYER)+'" target="_blank" rel="noopener noreferrer">Open Texas parcel GIS ↗</a>';return;
  }
- output.innerHTML='<p><strong>'+features.length+' GIS candidate(s)</strong> at the saved pin. These are candidates only, not verified matches. Confirm parcel ID, listing acreage and included tracts before saving. GIS is not a survey.</p>';
+ const check=features.length===1?parcelAutoCheck(p,features[0],features.length):{ok:false,reason:'Multiple candidates.'};
+ if(check.ok){
+  const current=shared.find(x=>x.id===propertyId);
+  if(current&&!boundaryMatched(current)){
+   current.parcelBoundary=parcelFromCandidate(features[0],check,'automatic: unique GIS parcel at saved pin; listing acreage and GIS situs number checked');
+   queue('shared');renderPropertyDetails();
+   const box=$('detailParcelResult');if(box)box.textContent='✓ One high-confidence GIS parcel found and automatically saved: '+check.id+'. This is not a legal survey.';
+   return;
+  }
+ }
+ output.innerHTML='<p><strong>'+features.length+' GIS candidate(s)</strong>. '+esc(check.reason||'')+' Please confirm the included parcel(s) manually. GIS data is not a legal survey.</p>';
  for(const f of features){
   const id=gisParcelId(f.properties),acres=polygonAreaAcres(f.geometry),ratio=p.acres?Math.abs(acres-p.acres)/p.acres:null;
   const item=document.createElement('div');item.className='detail-note';
@@ -1115,19 +1159,46 @@ async function findParcelCandidate(propertyId,output){
   if(id){
    const btn=document.createElement('button');btn.className='btn';btn.type='button';btn.textContent='Confirm this parcel matches the listing';
    btn.onclick=()=>{
-    if(!window.confirm('Only confirm if you checked that this parcel is included in the sale. For multi-parcel listings this outline is incomplete unless all tracts are included. Confirm GIS parcel '+id+'?'))return;
+    if(!window.confirm('Only confirm if you checked that this parcel is included in the sale. For multi-parcel listings this outline may be incomplete. Confirm GIS parcel '+id+'?'))return;
     const current=shared.find(x=>x.id===propertyId);if(!current)return;
-    const g=f.geometry;
-    const selected={type:g.type,coordinates:g.coordinates,source:TX_PARCELS_LAYER,parcelId:id,matched:true,checkedAt:new Date().toISOString().slice(0,10),matchMethod:'user-confirmed GIS candidate at saved map pin',gisAcres:Math.round(acres*100)/100};
+    const selected=parcelFromCandidate(f,{id,acres},'user-confirmed GIS candidate at saved map pin');
     if(!boundaryRings({parcelBoundary:selected}).length){output.textContent='GIS geometry could not be validated.';return}
     current.parcelBoundary=selected;queue('shared');renderPropertyDetails();
     const box=$('detailParcelResult');if(box)box.textContent='GIS parcel '+id+' saved after confirmation. This is not a legal survey.';
-   };
-   item.append(' ',btn);
-  }else{item.append(' No stable parcel identifier — cannot mark GIS Matched.');}
+   };item.append(' ',btn);
+  }else item.append(' No stable parcel identifier — cannot mark GIS Matched.');
   output.append(item);
  }
 }
+let parcelBatchRunning=false;
+async function autoFindMissingParcels(){
+ if(parcelBatchRunning)return;
+ const button=$('autoFindParcels'),box=$('parcelBatchStatus');
+ if(!ready||!me)return;
+ const todo=shared.filter(p=>!boundaryMatched(p));
+ if(!todo.length){if(box)box.textContent='All tracked properties already have a matched parcel.';return}
+ parcelBatchRunning=true;if(button)button.disabled=true;
+ const counts={matched:0,review:0,missing:0,errors:0};
+ // Sequential requests avoid overwhelming the public county GIS gateway.
+ try{
+  for(let i=0;i<todo.length;i++){
+   const target=todo[i],current=shared.find(p=>p.id===target.id);
+   if(!current||boundaryMatched(current))continue;
+   if(box)box.textContent='Checking '+(i+1)+' / '+todo.length+': '+target.address+' · '+counts.matched+' matched…';
+   if(!mapCoords(current)){counts.missing++;continue}
+   try{
+    const {features}=await lookupGISFeatures(current);
+    if(features.length===1){const result=parcelAutoCheck(current,features[0],1);
+     if(result.ok){current.parcelBoundary=parcelFromCandidate(features[0],result,'automatic batch: unique GIS parcel at saved pin; listing acreage and situs checked');counts.matched++}
+     else counts.review++;
+    }else if(features.length>1)counts.review++;else counts.missing++;
+   }catch(err){counts.errors++;console.warn('Parcel lookup failed for',current.address,err)}
+  }
+  if(counts.matched){queue('shared');if(mapActive)showPropertyMap();else render()}
+  if(box)box.textContent='Parcel scan complete: '+counts.matched+' automatically matched · '+counts.review+' need manual review · '+counts.missing+' unavailable/missing pin · '+counts.errors+' errors. Existing matches were preserved. GIS is not a legal survey.';
+ }finally{parcelBatchRunning=false;if(button)button.disabled=false}
+}
+
 function tripSection(p){
  const trips=p.travelTimes||{};
  const keys=new Set(ROUTE_DESTINATIONS.map(x=>x[0]));
@@ -2083,6 +2154,7 @@ function showPropertyMap(focusId=null){
  destroyRegionMap();drawInteractiveRegionMap(located,focusId);
 }
 function closePropertyMap(){destroyRegionMap();mapActive=false;$('propertyMapPage').classList.add('hidden');$('cards').classList.remove('hidden');switchView('properties')}
+$('autoFindParcels').onclick=autoFindMissingParcels;
 $('showMap').onclick=()=>showPropertyMap();
 $('closeMap').onclick=closePropertyMap;
 $('offlineMapZoomIn').onclick=()=>regionInteractiveReady&&regionMap?regionMap.zoomIn():setOfflineZoom(offlineMapZoom*1.7);

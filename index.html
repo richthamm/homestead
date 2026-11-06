@@ -217,6 +217,25 @@
 .hq-map-cluster:focus,.hq-map-pin:focus{outline:3px solid #fff}
 #propertyMapCanvas .leaflet-popup-content-wrapper{background:#1c3028;color:#f0f6f0}#propertyMapCanvas .leaflet-popup-tip{background:#1c3028}
 #propertyMapCanvas .leaflet-popup-content button{cursor:pointer}
+
+/* Map renderer isolated from legacy static SVG and Leaflet stacking contexts */
+.hq-geo-shell{position:absolute;inset:0;overflow:hidden;background:#283e34;touch-action:none;user-select:none;cursor:grab;isolation:isolate}
+.hq-geo-shell:active{cursor:grabbing}
+.hq-geo-image{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;user-select:none}
+.hq-geo-polygons{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.hq-geo-polygons path{stroke:#ffca72;stroke-width:3;fill:rgba(255,202,114,.12);vector-effect:non-scaling-stroke}
+.hq-geo-markers{position:absolute;inset:0;pointer-events:none}
+.hq-geo-marker{position:absolute;transform:translate(-50%,-50%);width:18px;height:18px;padding:0;border:2px solid #fff;border-radius:50%;background:#82b79d;box-shadow:0 2px 6px #000a;pointer-events:auto;cursor:pointer;z-index:4}
+.hq-geo-marker.favorite{background:#ecc771}.hq-geo-marker.serious{background:#ee926b}
+.hq-geo-cluster{width:36px;height:36px;background:#234e41;font-weight:750;color:white;border-color:#d7edc8}
+.hq-geo-marker:focus-visible{outline:3px solid white;outline-offset:3px}
+.hq-geo-status{position:absolute;top:12px;left:12px;max-width:70%;background:#182a22d9;color:#edf5ed;border-radius:5px;padding:6px 9px;font-size:12px;pointer-events:none;z-index:5}
+.hq-geo-attribution{position:absolute;right:5px;bottom:3px;color:#fff;text-shadow:0 1px 3px #000;background:#13231fb8;padding:2px 5px;font-size:10px;pointer-events:none;z-index:5}
+#parcelExplorerPanel{position:relative;isolation:isolate}
+#parcelExplorerBar{z-index:50;flex-shrink:0}
+#parcelExplorerTools,#parcelExplorerTools button{z-index:51;position:relative;pointer-events:auto}
+#parcelExplorerMap{flex:1 1 auto;min-height:0;position:relative;z-index:1;overflow:hidden}
+#parcelExplorerInfo{z-index:50}
 </style></head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.2     </span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
 <details id="hqDisclaimer" class="hq-disclaimer">
   <summary>⚠️ Data &amp; scoring notes <span class="small">Research and map limitations</span></summary>
@@ -2311,5 +2330,96 @@ $('export').onclick=async()=>{
  }catch(e){alert('Backup NOT complete — a discussion collection could not be read. Nothing downloaded. Error: '+e.message);status('⚠ Full backup failed: '+e.message,true)}
  finally{button.disabled=false;button.textContent=label}
 };
+
+/* v3.2.5: self-contained USGS export-based pan/zoom maps.
+   No Leaflet or third-party tile script is required. A fresh map image is requested
+   for the current viewport after an interaction; HTML markers remain constant size. */
+const HQ_MAP_RADIUS=6378137;
+function hqMerc(lon,lat){const a=Math.max(-85,Math.min(85,Number(lat)));return [HQ_MAP_RADIUS*Number(lon)*Math.PI/180,HQ_MAP_RADIUS*Math.log(Math.tan(Math.PI/4+a*Math.PI/360))]}
+function hqMapRect(points,ratio,padding=1.2){
+ const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
+ let minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);
+ const cx=(maxx+minx)/2,cy=(maxy+miny)/2;
+ let width=Math.max(500,maxx-minx)*padding,height=Math.max(500,maxy-miny)*padding;
+ if(width/height<ratio)width=height*ratio;else height=width/ratio;
+ return {cx,cy,width};
+}
+function createHQGeoMap(node,options){
+ const shell=document.createElement('div');shell.className='hq-geo-shell';shell.innerHTML='<img class="hq-geo-image" alt="USGS map imagery" draggable="false"><svg class="hq-geo-polygons" aria-label="Parcel boundary overlay"></svg><div class="hq-geo-markers"></div><div class="hq-geo-status" role="status">Loading map imagery…</div><div class="hq-geo-attribution">Map imagery © USGS The National Map · GIS lines are not legal surveys</div>';
+ node.replaceChildren(shell);
+ const img=shell.querySelector('img'),svg=shell.querySelector('svg'),markers=shell.querySelector('.hq-geo-markers'),msg=shell.querySelector('.hq-geo-status');
+ const abort=new AbortController();let disposed=false,pending=null,workingImage='',imageSerial=0;
+ const w=()=>Math.max(250,shell.clientWidth),h=()=>Math.max(250,shell.clientHeight),ratio=()=>w()/h();
+ const center=options.initial||{cx:hqMerc(-99,30)[0],cy:hqMerc(-99,30)[1],width:60000};
+ let view={...center};
+ let lastBaseUrl='',lastOverlayKey='';
+ function viewBox(){const width=view.width,height=width/ratio();return [view.cx-width/2,view.cy-height/2,view.cx+width/2,view.cy+height/2]}
+ function proj(lat,lon){const [x,y]=hqMerc(lon,lat),[l,b,r,t]=viewBox();return [(x-l)/(r-l)*w(),(t-y)/(t-b)*h()]}
+ function clamp(){const cap=options.maxWorldWidth||500000;view.width=Math.max(options.minWidth||90,Math.min(cap,view.width));const [mx,my]=options.regionCenter||[view.cx,view.cy],limit=options.panLimit||cap;
+  view.cx=Math.max(mx-limit,Math.min(mx+limit,view.cx));view.cy=Math.max(my-limit,Math.min(my+limit,view.cy));}
+ function setBounds(points,pad=1.25){const fit=hqMapRect(points,ratio(),pad);view={...fit};clamp();refresh(true)}
+ function setCenter(lat,lon,width){const [x,y]=hqMerc(lon,lat);view.cx=x;view.cy=y;if(width)view.width=width;clamp();refresh(true)}
+ function zoom(factor,atx=w()/2,aty=h()/2){const [l,b,r,t]=viewBox();const oldX=l+atx/w()*(r-l),oldY=t-aty/h()*(t-b);view.width*=factor;clamp();const [nl,nb,nr,nt]=viewBox();const newX=nl+atx/w()*(nr-nl),newY=nt-aty/h()*(nt-nb);view.cx+=oldX-newX;view.cy+=oldY-newY;clamp();refresh();}
+ function visibleElements(){
+  const paths=[];
+  for(const e of options.polygons||[]){if(options.showPolygons&&!options.showPolygons())continue;for(const ring of boundaryRings(e)){const pts=ring.map(pt=>proj(pt[1],pt[0]));paths.push('<path d="'+pts.map((pt,i)=>(i?'L':'M')+pt[0].toFixed(1)+','+pt[1].toFixed(1)).join(' ')+' Z" />')}}
+  svg.setAttribute('viewBox','0 0 '+w()+' '+h());svg.innerHTML=paths.join('');
+  const list=options.points||[];const positions=list.map(p=>{const c=mapCoords(p);return c?{p,xy:proj(...c)}:null}).filter(Boolean);
+  const clusters=[];for(const item of positions){const match=clusters.find(c=>Math.hypot(c.x-item.xy[0],c.y-item.xy[1])<(options.cluster===false?0:35));if(match){match.items.push(item.p);match.x=(match.x*(match.items.length-1)+item.xy[0])/match.items.length;match.y=(match.y*(match.items.length-1)+item.xy[1])/match.items.length;}else clusters.push({x:item.xy[0],y:item.xy[1],items:[item.p]})}
+  markers.replaceChildren();for(const c of clusters){if(c.x< -35||c.x>w()+35||c.y< -35||c.y>h()+35)continue;const b=document.createElement('button');b.type='button';b.style.left=c.x+'px';b.style.top=c.y+'px';const multi=c.items.length>1;b.className=multi?'hq-geo-marker hq-geo-cluster':'hq-geo-marker';b.title=multi?c.items.length+' nearby properties':c.items[0].address;b.setAttribute('aria-label',b.title);
+   if(multi){b.textContent=String(c.items.length);b.addEventListener('click',()=>{if(view.width>500){zoom(.5,c.x,c.y)}else options.onCluster?.(c.items)})}
+   else {const p=c.items[0];b.classList.add(hqClass(p)==='Favorite'?'favorite':hqClass(p)==='Serious inquiry'?'serious':'watchlist');b.addEventListener('click',()=>options.onMarker?.(p))}
+   markers.appendChild(b)}
+ }
+ function getURL(service){const bbox=viewBox();const scale=Math.min(2,window.devicePixelRatio||1,1600/w(),1200/h());const width=Math.max(1,Math.round(w()*scale));const height=Math.max(1,Math.round(h()*scale));return service+'/export?'+new URLSearchParams({bbox:bbox.map(n=>n.toFixed(2)).join(','),bboxSR:'3857',imageSR:'3857',size:width+','+height,format:'jpg',f:'image'}).toString()}
+ function loadImage(){if(disposed)return;const serial=++imageSerial;const services=options.imagery?[USGS_AERIAL,USGS_TOPO]:[USGS_TOPO];let index=0;msg.textContent='Loading map…';msg.style.display='block';function attempt(){if(disposed||serial!==imageSerial)return;const next=new Image();const src=getURL(services[index]);next.onload=()=>{if(disposed||serial!==imageSerial)return;img.src=src;workingImage=src;msg.style.display='none';};next.onerror=()=>{if(disposed||serial!==imageSerial)return;if(++index<services.length){attempt()}else{msg.textContent=workingImage?'Map background unavailable — showing previous image':'Map imagery unavailable; property markers and boundaries remain available';msg.style.display='block'}};next.src=src;}attempt()}
+ function refresh(immediate=false){if(disposed)return;visibleElements();clearTimeout(pending);if(immediate)loadImage();else pending=setTimeout(loadImage,180)}
+ let drag=null,moved=false;
+ shell.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button'))return;drag={x:e.clientX,y:e.clientY,cx:view.cx,cy:view.cy};moved=false;shell.setPointerCapture(e.pointerId)}, {signal:abort.signal});
+ shell.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>3)moved=true;view.cx=drag.cx-dx/w()*view.width;view.cy=drag.cy+dy/h()*view.width/ratio();clamp();visibleElements()},{signal:abort.signal});
+ shell.addEventListener('pointerup',()=>{if(!drag)return;drag=null;if(moved)refresh(true)},{signal:abort.signal});
+ shell.addEventListener('pointercancel',()=>{drag=null;refresh(true)},{signal:abort.signal});
+ shell.addEventListener('wheel',e=>{e.preventDefault();const r=shell.getBoundingClientRect();zoom(e.deltaY<0?.7:1.43,e.clientX-r.left,e.clientY-r.top)},{passive:false,signal:abort.signal});
+ const ro=new ResizeObserver(()=>{if(!disposed)refresh()});ro.observe(shell);
+ clamp();refresh(true);
+ return {remove(){disposed=true;abort.abort();clearTimeout(pending);ro.disconnect();shell.remove()},zoomIn(){zoom(.5)},zoomOut(){zoom(2)},fit(points,pad=1.25){setBounds(points,pad)},setView(coord,level){setCenter(coord[0],coord[1],Math.min(view.width,6000))},getZoom(){return Math.max(1,Math.round(Math.log2(300000/view.width)))},getSpan(){return view.width},refresh};
+}
+function hqBoundaryMercPoints(p){return boundaryRings(p).flat().map(pt=>hqMerc(pt[0],pt[1]))}
+function hqPointMerc(p){const c=mapCoords(p);return c?hqMerc(c[1],c[0]):null}
+// Override only the mapping presentation; property records, Firestore, and imports are untouched.
+drawInteractiveRegionMap=function(located,focusId){
+ try{
+  const all=located.map(hqPointMerc).filter(Boolean);if(!all.length){drawOfflineMap(located);return}
+  const canvas=$('propertyMapCanvas');const r=Math.max(1,canvas.clientWidth)/Math.max(1,canvas.clientHeight);
+  const extent=hqMapRect(all,r,1.35),longSide=Math.max(extent.width,20000);
+  regionMap=createHQGeoMap(canvas,{initial:extent,points:located,polygons:located,showPolygons:()=>showMapBoundaries,maxWorldWidth:longSide*2.8,panLimit:longSide*1.3,regionCenter:[extent.cx,extent.cy],minWidth:100,onMarker:p=>selectOfflinePin(p.id),onCluster:items=>{$('offlineMapSelection').innerHTML='<strong>'+items.length+' nearby properties</strong><div class="offline-selection-actions">'+items.map(p=>'<button class="btn" type="button" data-mapselect="'+esc(p.id)+'">'+esc(p.address)+', '+esc(p.city)+'</button>').join('')+'</div>'}});
+  regionInteractiveReady=true;
+  $('offlineMapZoomLabel').textContent='Interactive · '+located.length+' properties';
+  if(focusId){const p=located.find(x=>x.id===focusId);if(p)regionMap.setView(mapCoords(p),15)}
+ }catch(e){fallbackRegionMap(located,'Map initialization failed: '+String(e.message||e))}
+};
+updateRegionBoundaries=function(){if(regionMap&&regionInteractiveReady)regionMap.refresh()};
+setOfflineZoom=function(next,focusId){
+ if(regionInteractiveReady&&regionMap){
+  if(focusId){const p=shared.find(p=>p.id===focusId);if(p)regionMap.setView(mapCoords(p),15);return}
+  if(Number(next)<=1){const points=shared.filter(p=>(p.decision||'Active')!=='Rejected').map(hqPointMerc).filter(Boolean);if(points.length)regionMap.fit(points,1.35);return}
+  if(Number(next)>1)regionMap.zoomIn();return;
+ }
+ if(!offlineMapBounds)return;const {W,H}=offlineMapBounds;offlineMapZoom=Math.min(8,Math.max(1,Number(next)||1));
+ const vw=W/offlineMapZoom,vh=H/offlineMapZoom;const svg=$('offlineMapSvg');if(svg)svg.setAttribute('viewBox',[(W-vw)/2,(H-vh)/2,vw,vh].map(n=>n.toFixed(2)).join(' '));$('offlineMapZoomLabel').textContent=Math.round(offlineMapZoom*100)+'%';
+};
+openParcelExplorer=async function(id){
+ const p=shared.find(item=>String(item.id)===String(id));if(!p)return;const c=mapCoords(p);if(!c){alert('No valid location available for this property.');return}
+ closeParcelExplorer();const overlay=document.createElement('div');overlay.id='parcelExplorerOverlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Interactive aerial map of '+p.address);
+ overlay.innerHTML='<div id="parcelExplorerPanel"><div id="parcelExplorerBar"><div><strong>'+esc(p.address)+'</strong><span class="small"> · '+esc(p.city)+', TX</span></div><div id="parcelExplorerTools"><button type="button" class="btn" id="parcelExplorerFit">Fit entire boundary</button><button type="button" class="btn" id="parcelExplorerHouse">Zoom to home</button><button type="button" class="btn" id="parcelExplorerClose">✕ Close</button></div></div><div id="parcelExplorerMap"></div><div id="parcelExplorerInfo">'+esc(boundaryLabel(p))+' · Approximate GIS boundaries, not legal surveys · USGS imagery</div></div>';
+ document.body.appendChild(overlay);overlay.addEventListener('click',e=>{if(e.target===overlay)closeParcelExplorer()});$('parcelExplorerClose').onclick=closeParcelExplorer;parcelExplorerEscape=e=>{if(e.key==='Escape')closeParcelExplorer()};document.addEventListener('keydown',parcelExplorerEscape);
+ try{const merc=hqBoundaryMercPoints(p);const house=hqPointMerc(p),pts=merc.length?merc:[house];const node=$('parcelExplorerMap');const rect=hqMapRect(pts,Math.max(1,node.clientWidth)/Math.max(1,node.clientHeight),1.4);
+  parcelExplorerMap=createHQGeoMap(node,{initial:rect,imagery:true,polygons:[p],showPolygons:()=>true,points:[],maxWorldWidth:Math.max(25000,rect.width*8),minWidth:70,panLimit:Math.max(20000,rect.width*4),regionCenter:[rect.cx,rect.cy]});
+  $('parcelExplorerFit').onclick=()=>parcelExplorerMap?.fit(pts,1.4);
+  $('parcelExplorerHouse').onclick=()=>parcelExplorerMap?.setView(c,18);
+ }catch(e){$('parcelExplorerMap').innerHTML='<p class="small" style="padding:20px">Map unavailable: '+esc(e.message||String(e))+'</p>'}
+};
+// Correct the region reset and parcel close behavior without depending on Leaflet.
+$('offlineMapReset').onclick=()=>setOfflineZoom(1);
 
 </script></body></html>

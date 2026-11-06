@@ -604,9 +604,31 @@ function gate(text,buttons=''){$('cloudgate').style.display='flex';$('gateMessag
 function open(){ $('cloudgate').style.display='none'; }
 function listen(ref,callback){unsubs.push(onSnapshot(ref,callback,e=>status('Sync error: '+e.message,true)))}
 function cleanup(){if(ratingsUnsub)ratingsUnsub();if(partnerRatingsUnsub)partnerRatingsUnsub();ratingsUnsub=null;partnerRatingsUnsub=null;clearTimeout(ratingsTimer);myRatings={ratings:{}};partnerRatings={ratings:{}};ratingsReady=false;ratingsDirty=false;ratingsBusy=false;legacyRatingsImported=false;unsubs.forEach(f=>f());unsubs=[];Object.values(researchCommentListeners).forEach(f=>f());researchCommentListeners={};researchComments={};ready=false;me=null;shared=[];mine={};other={};partnerUid=null;dirtyShared=false;dirtyMine=false;clearTimeout(saveTimer)}
+// Firestore does not support arrays nested within arrays. GeoJSON parcel coordinates
+// are nested numeric arrays, so encode only that geometry field for cloud storage.
+// The running app, research imports, and backup exports continue using normal GeoJSON.
+function encodeSharedForFirestore(properties){
+ return JSON.parse(JSON.stringify(properties)).map(p=>{
+  if(p?.parcelBoundary && Array.isArray(p.parcelBoundary.coordinates)){
+   p.parcelBoundary.coordinatesJson=JSON.stringify(p.parcelBoundary.coordinates);
+   delete p.parcelBoundary.coordinates;
+  }
+  return p;
+ });
+}
+function decodeSharedFromFirestore(properties){
+ return (Array.isArray(properties)?properties:[]).map(p=>{
+  if(p?.parcelBoundary && !Array.isArray(p.parcelBoundary.coordinates) && typeof p.parcelBoundary.coordinatesJson==='string'){
+   try{p.parcelBoundary.coordinates=JSON.parse(p.parcelBoundary.coordinatesJson)}
+   catch(e){console.warn('Invalid stored GIS boundary coordinates for property',p.id,e)}
+  }
+  if(p?.parcelBoundary)delete p.parcelBoundary.coordinatesJson;
+  return p;
+ });
+}
 function queue(kind){if(!ready)return; if(kind==='shared')dirtyShared=true;else dirtyMine=true;status('Saving changes…');clearTimeout(saveTimer);saveTimer=setTimeout(flush,650)}
 async function flush(){if(saveBusy||!ready)return;saveBusy=true;let writeShared=dirtyShared,writeMine=dirtyMine;dirtyShared=false;dirtyMine=false;try{
- if(writeShared){let snapshot=JSON.parse(JSON.stringify(shared));await setDoc(sharedRef,{properties:snapshot,updatedAt:new Date().toISOString()});}
+ if(writeShared){let snapshot=encodeSharedForFirestore(shared);await setDoc(sharedRef,{properties:snapshot,updatedAt:new Date().toISOString()});}
  if(writeMine){await setDoc(personalRef(me.uid),{notes:mine.notes||{},ranks:mine.ranks||{},reviewed:mine.reviewed||{},updatedAt:new Date().toISOString()});}
  status('✓ Cloud saved at '+new Date().toLocaleTimeString());
  }catch(e){if(writeShared)dirtyShared=true;if(writeMine)dirtyMine=true;status('⚠ Save failed: '+e.message,true)}finally{saveBusy=false;if((dirtyShared||dirtyMine)&&ready&&!$('backupstatus').classList.contains('needsbackup'))setTimeout(flush,250)}}
@@ -642,12 +664,12 @@ async function showAdmin(){if(me.uid!==OWNER)return;let box=$('admin');box.class
 async function migrate(){if(!confirm('Migrate from the OLD dashboard into Version 2? This only works if Version 2 shared data does not already exist. Existing notes are preserved and both rank lists start blank.'))return;
  try{let old=await getDoc(legacyRef);if(!old.exists())throw Error('Old dashboard data not found.');let props=old.data().properties;if(!Array.isArray(props))throw Error('Old dashboard format is unexpected.');
  let notes={};let clean=props.map(p=>{let x={...p};if(x.userNotes)notes[x.id]=x.userNotes;delete x.userNotes;delete x.rank;return x});
- await runTransaction(db,async t=>{let current=await t.get(sharedRef);if(current.exists())throw Error('Version 2 already has data; migration cancelled to protect it.');t.set(sharedRef,{properties:clean,updatedAt:new Date().toISOString(),migratedFrom:'legacy-v9'});});
+ await runTransaction(db,async t=>{let current=await t.get(sharedRef);if(current.exists())throw Error('Version 2 already has data; migration cancelled to protect it.');t.set(sharedRef,{properties:encodeSharedForFirestore(clean),updatedAt:new Date().toISOString(),migratedFrom:'legacy-v9'});});
  let existing=await getDoc(personalRef(OWNER));if(!existing.exists())await setDoc(personalRef(OWNER),{notes,ranks:{},updatedAt:new Date().toISOString()});
  alert('Migration finished: '+clean.length+' properties, '+Object.keys(notes).length+' existing notes preserved. Both ranks are blank.');
  }catch(e){alert('Migration stopped: '+e.message+' Check Version 2 before retrying.')}}
 function start(){let mref=memberRef(me.uid);listen(mref,snap=>{if(!snap.exists()||snap.data().active!==true){cleanup();gate('Your account is not approved. Request access from Rich.','<button class="btn primary" id="request">Request approval</button> <button class="btn" id="pendingLogout">Sign out</button>');$('request').onclick=()=>requestAccess(auth.currentUser);$('pendingLogout').onclick=()=>signOut(auth);return}member=snap.data();});
- listen(sharedRef,snap=>{if(!dirtyShared){shared=snap.exists()?(snap.data().properties||[]):[];render();initializeOwnerRatings()}if(me.uid===OWNER&&!snap.exists()){status('No Version 2 properties yet. Use Owner tools → One-time migration.',true)}else if(snap.metadata?.fromCache){status('⚠ Viewing locally cached property data; cloud connection not yet confirmed.',true)}else{status('✓ Cloud connected · '+shared.length+' properties loaded')};});
+ listen(sharedRef,snap=>{if(!dirtyShared){shared=snap.exists()?decodeSharedFromFirestore(snap.data().properties||[]):[];render();initializeOwnerRatings()}if(me.uid===OWNER&&!snap.exists()){status('No Version 2 properties yet. Use Owner tools → One-time migration.',true)}else if(snap.metadata?.fromCache){status('⚠ Viewing locally cached property data; cloud connection not yet confirmed.',true)}else{status('✓ Cloud connected · '+shared.length+' properties loaded')};});
  listen(personalRef(me.uid),snap=>{if(!dirtyMine){mine=snap.exists()?snap.data():{notes:{},ranks:{},reviewed:{}};render()}});
  ratingsUnsub=onSnapshot(ratingsRef(me.uid),snap=>{
    if(!ratingsDirty&&!ratingsBusy){myRatings=snap.exists()?snap.data():{ratings:{}};myRatings.loaded=true;ratingsReady=true;render();initializeOwnerRatings()}

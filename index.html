@@ -186,6 +186,7 @@
 @media(max-width:700px){.master-grade-row{grid-template-columns:1fr;gap:6px}.master-category-body{padding:4px 9px 10px}}
 /* v3.2 research display, travel provenance, and parcel overlay */
 .card-parcel-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.aerial-card:has(.card-parcel-overlay){outline:2px solid #ffcb72;outline-offset:-2px}
 .card-parcel-overlay path{fill:rgba(255,202,114,.13);stroke:#ffcb72;stroke-width:3;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 2px #162018)}
 .aerial-card{position:relative;overflow:hidden}
 .aerial-card .aerial-tag{z-index:3}
@@ -198,10 +199,28 @@
 .route-setup input{display:block;width:100%;max-width:580px;margin:7px 0 10px;padding:9px;color:#eef5ed;background:#13271e;border:1px solid #64806e;border-radius:6px}
 .route-setup .actionline{margin:8px 0;display:flex;flex-wrap:wrap;gap:7px}
 #detailParcelResult{margin-top:10px}
+
+/* Interactive property-only aerial explorer and regional map with static fallback. */
+#parcelExplorerOverlay{position:fixed;inset:0;z-index:1100;background:#07100de8;display:flex;align-items:center;justify-content:center;padding:18px}
+#parcelExplorerPanel{width:min(1150px,100%);height:min(850px,95vh);display:flex;flex-direction:column;background:#172720;border:1px solid #829e89;border-radius:12px;overflow:hidden;box-shadow:0 15px 70px #000a}
+#parcelExplorerBar{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 15px;flex-wrap:wrap}
+#parcelExplorerMap{flex:1;min-height:250px;background:#27372d}
+#parcelExplorerTools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#parcelExplorerTools button{cursor:pointer}
+#parcelExplorerInfo{font-size:12px;color:#d0dbc9;padding:7px 15px;border-top:1px solid #405847}
+#parcelExplorerPanel .leaflet-container{font-family:inherit}
+/* Region map markers are HTML overlays: they do not scale with map zoom. */
+#propertyMapCanvas .leaflet-container{height:100%;width:100%;background:#2b4037}
+.hq-map-pin{width:18px;height:18px;border:2px solid #fff;border-radius:50%;background:#82b79d;box-shadow:0 2px 7px #000b;box-sizing:border-box;cursor:pointer}
+.hq-map-pin.favorite{background:#ecc771}.hq-map-pin.serious{background:#ee926b}
+.hq-map-cluster{display:flex;align-items:center;justify-content:center;width:36px;height:36px;background:#234e41;color:#fff;border:2px solid #d7edc8;border-radius:50%;font:bold 14px system-ui;box-shadow:0 2px 7px #000a;cursor:pointer}
+.hq-map-cluster:focus,.hq-map-pin:focus{outline:3px solid #fff}
+#propertyMapCanvas .leaflet-popup-content-wrapper{background:#1c3028;color:#f0f6f0}#propertyMapCanvas .leaflet-popup-tip{background:#1c3028}
+#propertyMapCanvas .leaflet-popup-content button{cursor:pointer}
 </style></head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.2     </span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
 <details id="hqDisclaimer" class="hq-disclaimer">
   <summary>⚠️ Data &amp; scoring notes <span class="small">Research and map limitations</span></summary>
-  <div class="hq-disclaimer-body">Saved listings are research snapshots, not live verified listing data. Card previews use public Texas NAIP 2022 aerial imagery where available (USGS fallback) and saved approximate location pins; imagery dates and resolution vary. The all-property overview uses one USGS topographic road-map image (not hundreds of tiles) and locally plotted saved property pins. Parcel outlines appear for stored GIS polygons; on-demand GIS parcel lookups require confirmation before saving. Drive times can be calculated via the optional Google Maps Routes integration. Master auto-grades use only explicit facts that meet the current criterion rubric, not historical points or live listing scraping. Every auto-grade has an explanation beside its score. Two independent scoring lists are retained. Progress bars use the 49 master scored criteria only. Not Assessed criteria remain in the fixed maximum as unearned points, not proven deficiencies. Non-scored assessments never affect the percentage. Personal notes, ranks, and wishlist ratings are saved separately for each account. Both accounts start from identical evidence-based automatic scores. Shared property changes sync between both accounts. New Discoveries is a shared review queue: ranking or marking reviewed counts as your review, and a property leaves New Discoveries when both people finish. Shared rejection and On Hold remove a property from the active review queue. Newly imported properties enter New Discoveries automatically.</div>
+  <div class="hq-disclaimer-body">Saved listings are research snapshots, not live verified listing data. Card previews use public Texas NAIP 2022 aerial imagery where available (USGS fallback) and saved approximate location pins; imagery dates and resolution vary. The all-property overview uses a free interactive map with clustered location markers, and falls back to the previous static USGS map if the interactive map fails. Parcel outlines appear for stored GIS polygons; on-demand GIS parcel lookups require confirmation before saving. Drive times can be calculated via the optional Google Maps Routes integration. Master auto-grades use only explicit facts that meet the current criterion rubric, not historical points or live listing scraping. Every auto-grade has an explanation beside its score. Two independent scoring lists are retained. Progress bars use the 49 master scored criteria only. Not Assessed criteria remain in the fixed maximum as unearned points, not proven deficiencies. Non-scored assessments never affect the percentage. Personal notes, ranks, and wishlist ratings are saved separately for each account. Both accounts start from identical evidence-based automatic scores. Shared property changes sync between both accounts. New Discoveries is a shared review queue: ranking or marking reviewed counts as your review, and a property leaves New Discoveries when both people finish. Shared rejection and On Hold remove a property from the active review queue. Newly imported properties enter New Discoveries automatically.</div>
 </details><div class="metrics"><div class="metric"><strong id="total">—</strong><span>Properties tracked</span></div><div class="metric"><strong id="serious">—</strong><span>Serious inquiries</span></div><div class="metric"><strong id="fresh">—</strong><span>New discoveries</span></div><div class="metric"><strong id="land">—</strong><span>10+ acres</span></div></div><div id="researchImportPanel" class="admin hidden" aria-live="polite"></div><div id="backupstatus" class="backupstatus" role="status">Connecting to cloud…</div><div class="hq-menu" aria-label="Homestead HQ menu">
   <div class="hq-menu-row" role="group" aria-label="Import and export">
     <span class="hq-menu-label">Data</span>
@@ -227,7 +246,7 @@
   <div class="toolbar hq-filter-toolbar"><input id="search" placeholder="Search address, town, features, notes…"><select id="group"><option value="all">All collections</option><option value="Serious inquiry">Serious inquiries</option><option value="Favorite">Favorites</option><option value="New discovery">New discoveries</option><option value="Watchlist">Watchlist</option></select><select id="sort"><option value="priority">Priority / discovery</option><option value="mine">My rankings</option><option value="other">Partner's rankings</option><option value="combined">Combined rankings</option><option value="grade">Overall match %</option><option value="priceasc">Price: low to high</option><option value="pricedesc">Price: high to low</option><option value="acres">Most acreage</option></select><select id="rankfilter"><option value="all">All ranking statuses</option><option value="mine-unranked">Unranked by me</option><option value="mine-ranked">Ranked by me</option><option value="other-unranked">Unranked by partner</option><option value="other-ranked">Ranked by partner</option><option value="both-ranked">Ranked by both</option></select><select id="acre"><option value="0">Any acreage</option><option value="5">5+ acres</option><option value="10">10+ acres</option><option value="20">20+ acres</option></select><select id="decisionfilter"><option value="tracking">Tracking (default)</option><option value="all">All decisions</option><option value="Active">Active</option><option value="On Hold">On hold</option><option value="Rejected">Rejected / archive</option></select></div>
 </div>
 
-<section id="propertyMapPage" class="hidden" aria-label="Lightweight regional property map"><div class="sectionbar"><h2>🗺️ Property Map</h2><button class="btn" id="closeMap" type="button">← Back to properties</button></div><div class="small">Central Texas regional road map with saved property pins. The road background loads as a single image from USGS The National Map (internet required); pins and controls remain in the dashboard. Pin coordinates are approximate and are not legal parcel boundaries. GIS parcel outlines appear when sourced geometry is supplied; they are not legal surveys.</div><div class="offline-map-legend"><span><i class="legend-dot watchlist"></i> Watchlist</span><span><i class="legend-dot favorite"></i> HQ Favorite</span><span><i class="legend-dot serious"></i> Serious Inquiry</span></div><div class="offline-map-toolbar"><button class="btn" id="offlineMapZoomOut" type="button" aria-label="Zoom out">−</button><button class="btn" id="offlineMapZoomIn" type="button" aria-label="Zoom in">＋</button><button class="btn" id="offlineMapReset" type="button">Show all properties</button><label class="map-boundary-toggle"><input id="mapBoundaryToggle" type="checkbox" checked> Show parcel boundaries</label><span class="small" id="offlineMapZoomLabel">100%</span></div><div id="propertyMapCanvas" class="offline-map-canvas" aria-label="Central Texas map with interactive property locations"></div><div id="offlineMapSelection" class="offline-map-selection small" aria-live="polite">Select a pin to see property details. Listing status describes market availability, not pin accuracy.</div><p id="mapNeedsLocation" class="small"></p><div id="mapLocationFallback" class="small" aria-live="polite"></div></section><section id="warCouncil" class="workspace-panel hidden" aria-label="War Council">
+<section id="propertyMapPage" class="hidden" aria-label="Lightweight regional property map"><div class="sectionbar"><h2>🗺️ Property Map</h2><button class="btn" id="closeMap" type="button">← Back to properties</button></div><div class="small">Interactive regional road map: zoom and drag to separate property markers. Nearby properties group into numbered clusters; click a cluster to zoom in. If the interactive map cannot load, HQ restores the previous static map. Coordinates are approximate, not legal boundaries.</div><div class="offline-map-legend"><span><i class="legend-dot watchlist"></i> Watchlist</span><span><i class="legend-dot favorite"></i> HQ Favorite</span><span><i class="legend-dot serious"></i> Serious Inquiry</span></div><div class="offline-map-toolbar"><button class="btn" id="offlineMapZoomOut" type="button" aria-label="Zoom out">−</button><button class="btn" id="offlineMapZoomIn" type="button" aria-label="Zoom in">＋</button><button class="btn" id="offlineMapReset" type="button">Show all properties</button><label class="map-boundary-toggle"><input id="mapBoundaryToggle" type="checkbox" checked> Show parcel boundaries</label><span class="small" id="offlineMapZoomLabel">100%</span></div><div id="propertyMapCanvas" class="offline-map-canvas" aria-label="Central Texas map with interactive property locations"></div><div id="offlineMapSelection" class="offline-map-selection small" aria-live="polite">Select a pin to see property details. Listing status describes market availability, not pin accuracy.</div><p id="mapNeedsLocation" class="small"></p><div id="mapLocationFallback" class="small" aria-live="polite"></div></section><section id="warCouncil" class="workspace-panel hidden" aria-label="War Council">
   <div class="sectionbar">
     <h2>⚔️ The War Council</h2>
     <span class="small">Rich & Tiffany's combined rankings</span>
@@ -830,16 +849,16 @@ function boundaryMatched(p){
  return !!(boundaryRings(p).length&&b.matched===true&&typeof b.source==='string'&&b.source.trim()&&(b.parcelId||Array.isArray(b.parcelIds)&&b.parcelIds.length)&&routeDay(b.checkedAt));
 }
 function boundaryLabel(p){return !boundaryRings(p).length?'No parcel outline':boundaryMatched(p)?'GIS Matched · Not a legal survey':'Approximate / Unverified outline';}
+// Keep the property-card image close to the home and nearby structures.
+// GIS parcel geometry never changes thumbnail scale; only the interactive map fits the whole tract.
 function aerialBounds(p){
- const rings=boundaryRings(p),c=mapCoords(p);
- if(!rings.length){if(!c)return null;const dy=55/111320,dx=dy*2.7/Math.max(.2,Math.cos(c[0]*Math.PI/180));return [c[1]-dx,c[0]-dy,c[1]+dx,c[0]+dy]}
- const pts=rings.flat(),xs=pts.map(x=>x[0]),ys=pts.map(x=>x[1]);
- let west=Math.min(...xs),east=Math.max(...xs),south=Math.min(...ys),north=Math.max(...ys);
- const lat=(south+north)/2,cw=Math.max(0.0006,east-west),ch=Math.max(0.0004,north-south),aspect=960/360;
- const width=Math.max(cw*1.18,ch*aspect/Math.max(.2,Math.cos(lat*Math.PI/180))*1.18);
- const height=Math.max(ch*1.18,width*Math.max(.2,Math.cos(lat*Math.PI/180))/aspect);
- const cx=(west+east)/2,cy=(south+north)/2;
- return [cx-width/2,cy-height/2,cx+width/2,cy+height/2];
+ const c=mapCoords(p);if(!c)return null;
+ const dy=55/111320,dx=dy*2.7/Math.max(.2,Math.cos(c[0]*Math.PI/180));
+ return [c[1]-dx,c[0]-dy,c[1]+dx,c[0]+dy];
+}
+function parcelFullBounds(p){
+ const rings=boundaryRings(p);if(!rings.length)return null;
+ const pts=rings.flat();return [Math.min(...pts.map(pt=>pt[1])),Math.min(...pts.map(pt=>pt[0])),Math.max(...pts.map(pt=>pt[1])),Math.max(...pts.map(pt=>pt[0]))];
 }
 function aerialImageUrl(p,source='texas'){
  const box=aerialBounds(p);if(!box)return '';
@@ -855,7 +874,49 @@ function cardBoundarySVG(p){
 function cardAerial(p){
  if(!aerialBounds(p))return '<div class="map-preview">📍 Approximate location unavailable</div>';
  const url=aerialImageUrl(p),fallback=aerialImageUrl(p,'usgs'),hasPolygon=boundaryRings(p).length>0;
- return `<button class="aerial-card" type="button" data-map-focus="${esc(p.id)}" aria-label="View ${esc(p.address)} on HQ property map" title="Open this property on HQ regional map"><img src="${esc(url)}" data-fallback="${esc(fallback)}" loading="lazy" decoding="async" alt="Aerial imagery near ${esc(p.address)}" referrerpolicy="strict-origin-when-cross-origin" onerror="if(!this.dataset.usgsFallback){this.dataset.usgsFallback='1';this.src=this.dataset.fallback;}else{this.onerror=null;this.closest('.aerial-card').classList.add('aerial-unavailable');this.style.display='none'}"><span class="aerial-failed">Aerial unavailable — open pinned map</span>${hasPolygon?cardBoundarySVG(p):'<span class="pin-dot" aria-hidden="true">📍</span>'}<span class="aerial-tag">${hasPolygon?esc(boundaryLabel(p)):'Approx. location'} · Aerial · Open map</span></button>`;
+ return `<button class="aerial-card" type="button" data-map-focus="${esc(p.id)}" aria-label="Explore ${esc(p.address)} in interactive aerial map" title="Explore aerial map and GIS boundary"><img src="${esc(url)}" data-fallback="${esc(fallback)}" loading="lazy" decoding="async" alt="Aerial imagery near ${esc(p.address)}" referrerpolicy="strict-origin-when-cross-origin" onerror="if(!this.dataset.usgsFallback){this.dataset.usgsFallback='1';this.src=this.dataset.fallback;}else{this.onerror=null;this.closest('.aerial-card').classList.add('aerial-unavailable');this.style.display='none'}"><span class="aerial-failed">Aerial unavailable — open pinned map</span>${hasPolygon?cardBoundarySVG(p):'<span class="pin-dot" aria-hidden="true">📍</span>'}<span class="aerial-tag">${hasPolygon?'▣ '+esc(boundaryLabel(p)):'Approx. location'} · Aerial · Explore</span></button>`;
+}
+// Free Leaflet map viewer loaded on demand; USGS imagery cache requires no Google billing.
+let parcelExplorerMap=null,parcelExplorerEscape=null,leafletLoadPromise=null;
+function loadLeafletExplorer(){
+ if(window.L)return Promise.resolve(window.L);
+ if(leafletLoadPromise)return leafletLoadPromise;
+ leafletLoadPromise=new Promise((resolve,reject)=>{
+  if(!document.getElementById('hqLeafletCss')){const css=document.createElement('link');css.id='hqLeafletCss';css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';css.integrity='sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyo7TVUeR4R7K2xw=';css.crossOrigin='';document.head.appendChild(css)}
+  const script=document.createElement('script');script.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';script.integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';script.crossOrigin='';script.onload=()=>window.L?resolve(window.L):reject(Error('Leaflet library did not initialize.'));script.onerror=()=>reject(Error('Unable to load Leaflet. Check your network or content blockers.'));document.head.appendChild(script);
+ }).catch(e=>{leafletLoadPromise=null;throw e});
+ return leafletLoadPromise;
+}
+function closeParcelExplorer(){
+ if(parcelExplorerMap){parcelExplorerMap.remove();parcelExplorerMap=null}
+ document.getElementById('parcelExplorerOverlay')?.remove();
+ if(parcelExplorerEscape){document.removeEventListener('keydown',parcelExplorerEscape);parcelExplorerEscape=null}
+}
+async function openParcelExplorer(id){
+ const p=shared.find(item=>String(item.id)===String(id));if(!p)return;
+ const c=mapCoords(p);if(!c){alert('No valid location or GIS boundary available for this property.');return}
+ closeParcelExplorer();
+ const overlay=document.createElement('div');overlay.id='parcelExplorerOverlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Interactive aerial map of '+p.address);
+ overlay.innerHTML='<div id="parcelExplorerPanel"><div id="parcelExplorerBar"><div><strong>'+esc(p.address)+'</strong><span class="small"> · '+esc(p.city)+', TX</span></div><div id="parcelExplorerTools"><button type="button" class="btn" id="parcelExplorerFit">Fit entire boundary</button><button type="button" class="btn" id="parcelExplorerHouse">Zoom to home</button><button type="button" class="btn" id="parcelExplorerClose">✕ Close</button></div></div><div id="parcelExplorerMap"><p class="small" style="padding:20px">Loading interactive aerial map…</p></div><div id="parcelExplorerInfo">'+esc(boundaryLabel(p))+' · GIS parcel boundaries are approximate and not legal surveys · Satellite: USGS The National Map</div></div>';
+ document.body.appendChild(overlay);
+ overlay.addEventListener('click',e=>{if(e.target===overlay)closeParcelExplorer()});
+ document.getElementById('parcelExplorerClose').onclick=closeParcelExplorer;
+ parcelExplorerEscape=e=>{if(e.key==='Escape')closeParcelExplorer()};document.addEventListener('keydown',parcelExplorerEscape);
+ try{
+  const L=await loadLeafletExplorer();if(!document.getElementById('parcelExplorerOverlay'))return;
+  const map=L.map('parcelExplorerMap',{zoomControl:true,maxZoom:19});parcelExplorerMap=map;
+  const imagery=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',{attribution:'Imagery: USGS The National Map',maxNativeZoom:16,maxZoom:19});
+  const streets=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19});
+  imagery.addTo(map);L.control.layers({'USGS aerial':imagery,'Street map':streets},null,{position:'topright'}).addTo(map);
+  const b=p.parcelBoundary;let shape=null;
+  if(boundaryRings(p).length){
+   shape=L.geoJSON({type:'Feature',properties:{},geometry:{type:b.type,coordinates:b.coordinates}},{style:{color:'#ffca72',weight:3,fillColor:'#ffca72',fillOpacity:0.10}}).addTo(map);
+  }else{L.marker(c).addTo(map).bindPopup('Approximate property location — boundary not matched.');}
+  const fit=()=>{if(shape&&shape.getBounds().isValid())map.fitBounds(shape.getBounds(),{padding:[32,32],maxZoom:18});else map.setView(c,17)};
+  document.getElementById('parcelExplorerFit').onclick=fit;
+  document.getElementById('parcelExplorerHouse').onclick=()=>map.setView(c,18);
+  fit();setTimeout(()=>map.invalidateSize(),100);
+ }catch(err){const node=document.getElementById('parcelExplorerMap');if(node)node.innerHTML='<p style="padding:22px;color:#f3d0b8">Interactive map unavailable: '+esc(err.message||String(err))+'</p>'}
 }
 function setHQClassification(id,value){const p=shared.find(x=>x.id===id);if(!p||!['Watchlist','Favorite','Serious inquiry'].includes(value))return;p.hqClassification=value;queue('shared');render()}
 function safeNumber(value){return typeof value==='number'&&Number.isFinite(value)?value:null}
@@ -1076,7 +1137,7 @@ function render(){if(!ready)return;
    button.setAttribute('aria-expanded',String(!expanded));
    panel.hidden=expanded;
  });
- document.querySelectorAll('[data-map-focus]').forEach(el=>el.onclick=()=>showPropertyMap(el.dataset.mapFocus));document.querySelectorAll('[data-hqclass]').forEach(el=>el.onchange=()=>setHQClassification(el.dataset.hqclass,el.value));document.querySelectorAll('[data-open-details]').forEach(el=>el.onclick=()=>openPropertyDetails(el.dataset.openDetails));document.querySelectorAll('[data-rank]').forEach(el=>el.onchange=()=>setRank(el.dataset.rank,el.value));document.querySelectorAll('[data-nudge]').forEach(el=>el.onclick=()=>nudgeRank(el.dataset.nudge,el.dataset.dir));document.querySelectorAll('[data-unrank]').forEach(el=>el.onclick=()=>setRank(el.dataset.unrank,''));document.querySelectorAll('[data-reviewed]').forEach(el=>el.onclick=()=>setReviewed(el.dataset.reviewed));document.querySelectorAll('[data-notes]').forEach(el=>el.oninput=()=>setNotes(el.dataset.notes,el.value));document.querySelectorAll('[data-decision]').forEach(el=>el.onclick=()=>setDecision(el.dataset.id,el.dataset.decision));document.querySelectorAll('[data-research]').forEach(el => {
+ document.querySelectorAll('[data-map-focus]').forEach(el=>el.onclick=()=>openParcelExplorer(el.dataset.mapFocus));document.querySelectorAll('[data-hqclass]').forEach(el=>el.onchange=()=>setHQClassification(el.dataset.hqclass,el.value));document.querySelectorAll('[data-open-details]').forEach(el=>el.onclick=()=>openPropertyDetails(el.dataset.openDetails));document.querySelectorAll('[data-rank]').forEach(el=>el.onchange=()=>setRank(el.dataset.rank,el.value));document.querySelectorAll('[data-nudge]').forEach(el=>el.onclick=()=>nudgeRank(el.dataset.nudge,el.dataset.dir));document.querySelectorAll('[data-unrank]').forEach(el=>el.onclick=()=>setRank(el.dataset.unrank,''));document.querySelectorAll('[data-reviewed]').forEach(el=>el.onclick=()=>setReviewed(el.dataset.reviewed));document.querySelectorAll('[data-notes]').forEach(el=>el.oninput=()=>setNotes(el.dataset.notes,el.value));document.querySelectorAll('[data-decision]').forEach(el=>el.onclick=()=>setDecision(el.dataset.id,el.dataset.decision));document.querySelectorAll('[data-research]').forEach(el => {
   el.onclick = () => {
     const p = shared.find(x => x.id === el.dataset.research);
     if (!p) return;
@@ -1790,7 +1851,8 @@ function switchView(view) {
 
 // The offline overview is a self-contained, geographically projected SVG.
 // It does not use Leaflet, remote tile servers, or a paid Maps API.
-let mapActive=false,offlineMapProject=null,offlineMapBounds=null,offlineMapZoom=1,offlineMapFocus=null,showMapBoundaries=true;
+let mapActive=false,offlineMapProject=null,offlineMapBounds=null,offlineMapZoom=1,offlineMapFocus=null,showMapBoundaries=false;
+let regionMap=null,regionPins=null,regionBoundaryLayer=null,regionMapGeneration=0,regionInteractiveReady=false;
 const overviewTowns=[
   ['Kerrville',30.0474,-99.1403],['Fredericksburg',30.2752,-98.8719],
   ['Boerne',29.7947,-98.7320],['Bandera',29.7266,-99.0737],
@@ -1824,6 +1886,85 @@ function overviewParcelPaths(p,project){
   const xy=ring.map(pt=>project(pt[1],pt[0]));
   return '<path d="'+xy.map((v,i)=>(i?'L':'M')+v.x.toFixed(2)+' '+v.y.toFixed(2)).join(' ')+' Z" fill="'+(boundaryMatched(p)?'#ffc86618':'#a8bfc014')+'" stroke="'+(boundaryMatched(p)?'#ffca72':'#b6c8c2')+'" stroke-dasharray="'+(boundaryMatched(p)?'none':'6 4')+'" stroke-width="2.5" vector-effect="non-scaling-stroke"><title>'+esc(boundaryLabel(p))+' — '+esc(p.address)+'</title></path>';
  }).join('');
+}
+// Interactive overview reuses the already-provisioned Leaflet library. A static map remains
+// available if the library, browser environment, or basemap fails to initialize.
+function destroyRegionMap(){
+ regionMapGeneration++;regionInteractiveReady=false;
+ if(regionMap){try{regionMap.remove()}catch(e){}regionMap=null}
+ regionPins=null;regionBoundaryLayer=null;
+}
+function regionPinIcon(L,p){
+ const klass=hqClass(p)==='Favorite'?'favorite':hqClass(p)==='Serious inquiry'?'serious':'';
+ return L.divIcon({className:'',html:'<div class="hq-map-pin '+klass+'"></div>',iconSize:[18,18],iconAnchor:[9,9]});
+}
+function renderRegionPins(located){
+ if(!regionMap||!regionPins||!window.L)return;
+ const L=window.L,map=regionMap,zoom=map.getZoom();regionPins.clearLayers();
+ // Group by viewport proximity. HTML markers maintain fixed pixel size at all zooms.
+ // Expanding a cluster zooms in to separate members; at max zoom, show a picker.
+ const groups=[];const limit=zoom>=17?0:37;
+ for(const p of located){
+  const c=mapCoords(p);if(!c)continue;
+  const xy=map.project(c,zoom);
+  let group=limit?groups.find(g=>Math.hypot(g.x-xy.x,g.y-xy.y)<limit):null;
+  if(group){group.items.push(p);group.x=(group.x*(group.items.length-1)+xy.x)/group.items.length;group.y=(group.y*(group.items.length-1)+xy.y)/group.items.length}
+  else groups.push({x:xy.x,y:xy.y,items:[p]});
+ }
+ for(const g of groups){
+  if(g.items.length===1){
+   const p=g.items[0];const marker=L.marker(mapCoords(p),{icon:regionPinIcon(L,p),title:p.address+' '+p.city,keyboard:true});
+   marker.on('click',()=>selectOfflinePin(p.id));regionPins.addLayer(marker);
+  }else{
+   const c=map.unproject(L.point(g.x,g.y),zoom),n=g.items.length;
+   const icon=L.divIcon({className:'',html:'<div class="hq-map-cluster" title="'+n+' properties — click to expand">'+n+'</div>',iconSize:[36,36],iconAnchor:[18,18]});
+   const marker=L.marker(c,{icon,title:n+' nearby properties',keyboard:true});
+   marker.on('click',()=>{
+    if(map.getZoom()<17){map.setView(c,Math.min(17,map.getZoom()+2),{animate:true});return}
+    const panel=$('offlineMapSelection');
+    panel.innerHTML='<strong>'+n+' nearby properties</strong> · Choose one below:<div class="offline-selection-actions">'+g.items.map(p=>'<button class="btn" type="button" data-mapselect="'+esc(p.id)+'">'+esc(p.address)+', '+esc(p.city)+'</button>').join('')+'</div>';
+    panel.scrollIntoView({block:'nearest'});
+   });regionPins.addLayer(marker);
+  }
+ }
+}
+function updateRegionBoundaries(located){
+ if(!regionMap||!regionBoundaryLayer||!window.L)return;
+ regionBoundaryLayer.clearLayers();if(!showMapBoundaries)return;
+ for(const p of located){const b=p.parcelBoundary;if(!boundaryRings(p).length)continue;
+  try{window.L.geoJSON({type:'Feature',properties:{},geometry:{type:b.type,coordinates:b.coordinates}},{style:{color:boundaryMatched(p)?'#ffca72':'#b6c8c2',weight:2,fillOpacity:.07}}).addTo(regionBoundaryLayer)}catch(e){}
+ }
+}
+async function drawInteractiveRegionMap(located,focusId){
+ const generation=++regionMapGeneration;
+ try{
+  const L=await loadLeafletExplorer();
+  if(generation!==regionMapGeneration||!mapActive)return;
+  $('propertyMapCanvas').innerHTML='';
+  const map=L.map('propertyMapCanvas',{zoomControl:false,scrollWheelZoom:true,preferCanvas:true});regionMap=map;
+  L.control.zoom({position:'topright'}).addTo(map);
+  // No API key. OSM tiles are community provided and must be used according to their policy.
+  // USGS topo is the no-key alternate if OSM tiles cannot be displayed.
+  const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19});
+  const usgs=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',{attribution:'USGS The National Map',maxNativeZoom:16,maxZoom:19});
+  let firstTile=false,errors=0,fallbackBasemap=false;
+  const tileTimer=setTimeout(()=>{if(!firstTile&&generation===regionMapGeneration&&mapActive){fallbackRegionMap(located,'Interactive map tiles did not load; using the reliable overview map.')}},8500);
+  osm.on('tileload',()=>{firstTile=true;clearTimeout(tileTimer)});
+  osm.on('tileerror',()=>{if(++errors>=5&&!firstTile&&!fallbackBasemap){fallbackBasemap=true;osm.remove();usgs.addTo(map);usgs.on('tileload',()=>{firstTile=true;clearTimeout(tileTimer)});usgs.on('tileerror',()=>{if(++errors>=12&&!firstTile)fallbackRegionMap(located,'Neither road-map tile source loaded.')})}});
+  osm.addTo(map);
+  L.control.layers({'OpenStreetMap roads':osm,'USGS topographic':usgs},null,{position:'topright'}).addTo(map);
+  regionPins=L.layerGroup().addTo(map);regionBoundaryLayer=L.layerGroup().addTo(map);
+  const points=located.map(p=>mapCoords(p)).filter(Boolean);
+  map.fitBounds(L.latLngBounds(points),{padding:[30,30],maxZoom:13});
+  map.on('zoomend moveend',()=>{if(regionMap===map){renderRegionPins(located);$('offlineMapZoomLabel').textContent='Zoom '+map.getZoom()}});
+  renderRegionPins(located);updateRegionBoundaries(located);regionInteractiveReady=true;
+  setTimeout(()=>{if(regionMap===map)map.invalidateSize()},100);
+  if(focusId){const p=located.find(x=>x.id===focusId);if(p){map.setView(mapCoords(p),15);selectOfflinePin(focusId)}}
+ }catch(err){if(generation===regionMapGeneration&&mapActive)fallbackRegionMap(located,'Interactive library unavailable: '+String(err.message||err))}
+}
+function fallbackRegionMap(located,reason){
+ destroyRegionMap();drawOfflineMap(located);
+ $('offlineMapSelection').textContent=reason+' You can still use property pins and the property list below.';
 }
 function drawOfflineMap(located){
  const {minLat,maxLat,minLon,maxLon,W,H,project,topoUrl}=overviewLayout(located);
@@ -1867,6 +2008,11 @@ function drawOfflineMap(located){
  setOfflineZoom(1);
 }
 function setOfflineZoom(next,focusId){
+ if(regionInteractiveReady&&regionMap){
+  if(focusId){const p=shared.find(x=>x.id===focusId);if(p&&mapCoords(p)){regionMap.setView(mapCoords(p),Math.max(15,regionMap.getZoom()));return}}
+  if(Number(next)<=1){const pts=shared.filter(p=>(p.decision||'Active')!=='Rejected').map(mapCoords).filter(Boolean);if(pts.length)regionMap.fitBounds(window.L.latLngBounds(pts),{padding:[30,30]});return}
+  regionMap.setZoom(Math.max(1,Math.min(19,Math.round(Math.log2(Number(next))+regionMap.getZoom()))));return;
+ }
  if(!offlineMapBounds)return;
  const {W,H}=offlineMapBounds;
  offlineMapZoom=Math.min(8,Math.max(1,Number(next)||1));
@@ -1894,19 +2040,19 @@ function showPropertyMap(focusId=null){
  const located=active.filter(p=>!!mapCoords(p));
  const missing=active.length-located.length;
  const outlined=located.filter(p=>['Polygon','MultiPolygon'].includes(p.parcelBoundary?.type)).length;
- $('mapNeedsLocation').textContent=`${located.length} of ${active.length} tracked properties plotted from saved coordinates. ${missing} need coordinates. ${outlined} verified parcel outlines supplied. USGS topographic road background; pins use saved approximate coordinates, not legal parcel boundaries.`;
+ $('mapNeedsLocation').textContent=`${located.length} of ${active.length} tracked properties plotted from saved coordinates. ${missing} need coordinates. ${outlined} GIS parcel outlines supplied. USGS topographic road background; pins use saved approximate coordinates, not legal parcel boundaries.`;
  $('mapLocationFallback').innerHTML='<details class="map-fallback-list"><summary>All property locations (accessible list)</summary>'+located.map(p=>`<p><button class="btn" type="button" data-mapselect="${esc(p.id)}">📍 ${esc(p.address)}, ${esc(p.city)}</button> · <a target="_blank" rel="noopener" href="${safeUrl(mapLink(p))}">Open precise pin ↗</a></p>`).join('')+'</details>';
- drawOfflineMap(located);
- $('offlineMapSelection').textContent='Select a pin to see property details.';
- if(focusId){selectOfflinePin(focusId);setOfflineZoom(4,focusId)}
+ $('offlineMapSelection').textContent='Select a property marker; click a numbered cluster to zoom into nearby properties.';
+ destroyRegionMap();drawInteractiveRegionMap(located,focusId);
 }
-function closePropertyMap(){mapActive=false;$('propertyMapPage').classList.add('hidden');$('cards').classList.remove('hidden');switchView('properties')}
+function closePropertyMap(){destroyRegionMap();mapActive=false;$('propertyMapPage').classList.add('hidden');$('cards').classList.remove('hidden');switchView('properties')}
 $('showMap').onclick=()=>showPropertyMap();
 $('closeMap').onclick=closePropertyMap;
-$('offlineMapZoomIn').onclick=()=>setOfflineZoom(offlineMapZoom*1.7);
-$('offlineMapZoomOut').onclick=()=>setOfflineZoom(offlineMapZoom/1.7);
+$('offlineMapZoomIn').onclick=()=>regionInteractiveReady&&regionMap?regionMap.zoomIn():setOfflineZoom(offlineMapZoom*1.7);
+$('offlineMapZoomOut').onclick=()=>regionInteractiveReady&&regionMap?regionMap.zoomOut():setOfflineZoom(offlineMapZoom/1.7);
 $('offlineMapReset').onclick=()=>setOfflineZoom(1);
-$('mapBoundaryToggle').onchange=e=>{showMapBoundaries=e.target.checked;const located=shared.filter(p=>mapCoords(p));drawOfflineMap(located);};
+$('mapBoundaryToggle').checked=false;
+$('mapBoundaryToggle').onchange=e=>{showMapBoundaries=e.target.checked;const located=shared.filter(p=>(p.decision||'Active')!=='Rejected'&&mapCoords(p));if(regionInteractiveReady)updateRegionBoundaries(located);else drawOfflineMap(located);};
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-mapopen]');if(b){openPropertyDetails(b.dataset.mapopen);return}
  const p=e.target.closest('[data-mapselect]');if(p){selectOfflinePin(p.dataset.mapselect);}

@@ -193,10 +193,15 @@
 .trip-status.verified{color:#c9e8d0;border-color:#6c997c}
 .map-boundary-toggle{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#e3ece5;cursor:pointer}
 .map-boundary-toggle input{accent-color:#a9cc9a}
+.route-setup{border:1px solid #496856;border-radius:9px;padding:12px;margin:12px 0;background:#1c3027}
+.route-setup label{display:block;font-size:13px;color:#d9e8db}
+.route-setup input{display:block;width:100%;max-width:580px;margin:7px 0 10px;padding:9px;color:#eef5ed;background:#13271e;border:1px solid #64806e;border-radius:6px}
+.route-setup .actionline{margin:8px 0;display:flex;flex-wrap:wrap;gap:7px}
+#detailParcelResult{margin-top:10px}
 </style></head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.2     </span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
 <details id="hqDisclaimer" class="hq-disclaimer">
   <summary>⚠️ Data &amp; scoring notes <span class="small">Research and map limitations</span></summary>
-  <div class="hq-disclaimer-body">Saved listings are research snapshots, not live verified listing data. Card previews use public Texas NAIP 2022 aerial imagery where available (USGS fallback) and saved approximate location pins; imagery dates and resolution vary. The all-property overview uses one USGS topographic road-map image (not hundreds of tiles) and locally plotted saved property pins. Parcel outlines only appear when verified GIS polygons exist; driving times appear when supplied by a routing source. Master auto-grades use only explicit facts that meet the current criterion rubric, not historical points or live listing scraping. Every auto-grade has an explanation beside its score. Two independent scoring lists are retained. Progress bars use the 49 master scored criteria only. Not Assessed criteria remain in the fixed maximum as unearned points, not proven deficiencies. Non-scored assessments never affect the percentage. Personal notes, ranks, and wishlist ratings are saved separately for each account. Both accounts start from identical evidence-based automatic scores. Shared property changes sync between both accounts. New Discoveries is a shared review queue: ranking or marking reviewed counts as your review, and a property leaves New Discoveries when both people finish. Shared rejection and On Hold remove a property from the active review queue. Newly imported properties enter New Discoveries automatically.</div>
+  <div class="hq-disclaimer-body">Saved listings are research snapshots, not live verified listing data. Card previews use public Texas NAIP 2022 aerial imagery where available (USGS fallback) and saved approximate location pins; imagery dates and resolution vary. The all-property overview uses one USGS topographic road-map image (not hundreds of tiles) and locally plotted saved property pins. Parcel outlines appear for stored GIS polygons; on-demand GIS parcel lookups require confirmation before saving. Drive times can be calculated via the optional Google Maps Routes integration. Master auto-grades use only explicit facts that meet the current criterion rubric, not historical points or live listing scraping. Every auto-grade has an explanation beside its score. Two independent scoring lists are retained. Progress bars use the 49 master scored criteria only. Not Assessed criteria remain in the fixed maximum as unearned points, not proven deficiencies. Non-scored assessments never affect the percentage. Personal notes, ranks, and wishlist ratings are saved separately for each account. Both accounts start from identical evidence-based automatic scores. Shared property changes sync between both accounts. New Discoveries is a shared review queue: ranking or marking reviewed counts as your review, and a property leaves New Discoveries when both people finish. Shared rejection and On Hold remove a property from the active review queue. Newly imported properties enter New Discoveries automatically.</div>
 </details><div class="metrics"><div class="metric"><strong id="total">—</strong><span>Properties tracked</span></div><div class="metric"><strong id="serious">—</strong><span>Serious inquiries</span></div><div class="metric"><strong id="fresh">—</strong><span>New discoveries</span></div><div class="metric"><strong id="land">—</strong><span>10+ acres</span></div></div><div id="researchImportPanel" class="admin hidden" aria-live="polite"></div><div id="backupstatus" class="backupstatus" role="status">Connecting to cloud…</div><div class="hq-menu" aria-label="Homestead HQ menu">
   <div class="hq-menu-row" role="group" aria-label="Import and export">
     <span class="hq-menu-label">Data</span>
@@ -852,6 +857,111 @@ function routeStatus(x){
  if(credibleRoute(x))return x.manualVerified?'Manually Verified':'Verified';
  return 'Estimated / Unverified';
 }
+// Optional browser-only routing setup; never write an API key to the shared Firestore document.
+const ROUTES_KEY_STORAGE='homestead_hq_google_routes_browser_key';
+const TX_PARCELS_LAYER='https://feature.geographic.texas.gov/arcgis/rest/services/Parcels/stratmap_land_parcels_48_most_recent/MapServer/0';
+function getRoutesKey(){try{return localStorage.getItem(ROUTES_KEY_STORAGE)||''}catch{return ''}}
+function setRoutesKey(key){try{if(key)localStorage.setItem(ROUTES_KEY_STORAGE,key);else localStorage.removeItem(ROUTES_KEY_STORAGE);return true}catch{return false}}
+let googleRoutesLoading=null;
+async function googleRoutesClass(){
+ if(!getRoutesKey())throw Error('Set up a restricted Google Maps browser key first.');
+ if(!googleRoutesLoading){
+  googleRoutesLoading=new Promise((resolve,reject)=>{
+   if(window.google?.maps?.importLibrary){resolve(window.google.maps);return}
+   const callback='__hqRoutesReady';
+   window[callback]=()=>{delete window[callback];resolve(window.google.maps)};
+   const script=document.createElement('script');
+   const params=new URLSearchParams({key:getRoutesKey(),v:'weekly',callback});
+   script.src='https://maps.googleapis.com/maps/api/js?'+params;
+   script.async=true;script.onerror=()=>reject(Error('Google Maps library could not load. Check allowed website referrers, billing, and enabled APIs.'));
+   document.head.append(script);
+  }).catch(err=>{googleRoutesLoading=null;throw err});
+ }
+ const maps=await googleRoutesLoading;
+ return (await maps.importLibrary('routes')).Route;
+}
+function routeDirectionsLink(p,target){return 'https://www.google.com/maps/dir/?api=1&origin='+encodeURIComponent(p.address+', '+p.city+', TX')+'&destination='+encodeURIComponent(target)+'&travelmode=driving';}
+async function computeTravelRoutes(propertyId,status){
+ const p=shared.find(x=>x.id===propertyId);if(!p)return;
+ if(!getRoutesKey())throw Error('Save your Google Maps browser API key first.');
+ const Route=await googleRoutesClass();
+ const allKeys=new Set(ROUTE_DESTINATIONS.map(x=>x[0]));
+ const extra=Object.entries(p.travelTimes||{}).filter(([key,v])=>!allKeys.has(key)&&v?.destination).map(([key,v])=>[key,String(v.label||v.destination),String(v.target||v.destination)]);
+ const destinations=[...ROUTE_DESTINATIONS,...extra];
+ const origin=p.address+', '+p.city+', TX, USA';
+ let successes=0,errors=[];
+ for(const [key,label,target] of destinations){
+  if(status)status.textContent='Routing '+label+' ('+(successes+errors.length+1)+'/'+destinations.length+')…';
+  try{
+   const response=await Route.computeRoutes({origin,destination:target,travelMode:'DRIVING',routingPreference:'TRAFFIC_UNAWARE',fields:['distanceMeters','durationMillis']});
+   const best=response?.routes?.[0];
+   if(!Number.isFinite(best?.distanceMeters)||!Number.isFinite(best?.durationMillis))throw Error('No usable route returned');
+   const minutes=Math.round(best.durationMillis/60000),miles=Math.round(best.distanceMeters/1609.344*10)/10;
+   const old=p.travelTimes?.[key];
+   if(old?.manualVerified===true){successes++;continue}
+   // Leave personal verification intact; save measurements and their generated source metadata.
+   p.travelTimes={...(p.travelTimes||{}),[key]:{...(old||{}),minutes,miles,destination:label,target,source:'Google Maps Routes API (computed in HQ)',sourceUrl:routeDirectionsLink(p,target),verifiedAt:new Date().toISOString().slice(0,10),routingPreference:'TRAFFIC_UNAWARE'}};
+   successes++;
+  }catch(e){errors.push(label+': '+String(e.message||e))}
+ }
+ if(successes){queue('shared');renderPropertyDetails()}
+ const box=$('hqRoutesStatus');if(box)box.textContent=successes+' destination(s) calculated'+(errors.length?'; '+errors.join(' · '):'.')+'. No live traffic included.';
+}
+function polygonAreaAcres(geometry){
+ const polys=geometry.type==='Polygon'?[geometry.coordinates]:geometry.coordinates;
+ let area=0;
+ for(const poly of polys)for(let j=0;j<poly.length;j++){
+  const ring=poly[j];if(!Array.isArray(ring)||ring.length<4)continue;
+  const lat=ring.reduce((a,p)=>a+Number(p[1]),0)/ring.length;
+  let twice=0;for(let k=0;k<ring.length;k++){const a=ring[k],b=ring[(k+1)%ring.length];twice+=(a[0]*b[1]-b[0]*a[1])}
+  const m2=Math.abs(twice/2)*111320*111320*Math.cos(lat*Math.PI/180);
+  area+=(j===0?m2:-m2);
+ }
+ return Math.max(0,area/4046.8564224);
+}
+function gisParcelId(props){
+ for(const [key,val] of Object.entries(props||{}))if(/^(prop_id|propid|parcel_?id|geo_?id|account_?(number|id)|cad_?id|property_?id|pid)$/i.test(key)&&val!=null&&String(val).trim())return String(val);
+ return null;
+}
+function validParcelFeature(f){
+ if(!f||!['Polygon','MultiPolygon'].includes(f.geometry?.type)||!Array.isArray(f.geometry?.coordinates))return false;
+ return boundaryRings({parcelBoundary:f.geometry}).length>0;
+}
+async function findParcelCandidate(propertyId,output){
+ const p=shared.find(x=>x.id===propertyId);if(!p)return;
+ const pos=mapCoords(p);
+ if(!pos){output.textContent='This property has no usable coordinates. First research or enter an accurate parcel location; an address alone cannot safely identify the correct polygon.';return}
+ output.textContent='Searching Texas statewide appraisal parcel GIS for the saved map pin…';
+ const params=new URLSearchParams({f:'geojson',where:'1=1',geometry:pos[1]+','+pos[0],geometryType:'esriGeometryPoint',inSR:'4326',spatialRel:'esriSpatialRelIntersects',outFields:'*',outSR:'4326',returnGeometry:'true'});
+ try{
+  const response=await fetch(TX_PARCELS_LAYER+'/query?'+params,{mode:'cors'});
+  if(!response.ok)throw Error('GIS service HTTP '+response.status);
+  const result=await response.json();if(result.error)throw Error(result.error.message||'GIS service error');
+  const features=(result.features||[]).filter(validParcelFeature).slice(0,8);
+  if(!features.length){output.innerHTML='No parcel polygon found at this saved pin. It may be approximate, the county may not be covered, or the dataset may be outdated. <a href="'+esc(TX_PARCELS_LAYER)+'" target="_blank" rel="noopener">Inspect GIS service ↗</a>';return}
+  output.innerHTML='<p><strong>'+features.length+' GIS candidate(s)</strong> at the saved pin. These are candidates only, not verified matches. Confirm parcel ID, listing acreage and included tracts before saving. GIS is not a survey.</p>';
+  for(const f of features){
+   const id=gisParcelId(f.properties),acres=polygonAreaAcres(f.geometry),ratio=p.acres?Math.abs(acres-p.acres)/p.acres:null;
+   const item=document.createElement('div');item.className='detail-note';
+   const warning=ratio!==null&&ratio>.20?' ⚠ Significant difference from listing acreage.':'';
+   item.textContent='Parcel '+(id||'(identifier not supplied)')+' · approx. '+acres.toFixed(2)+' GIS acres vs '+(p.acres??'unknown')+' listed acres.'+warning;
+   if(id){
+    const btn=document.createElement('button');btn.className='btn';btn.type='button';btn.textContent='Confirm this parcel matches the listing';
+    btn.onclick=()=>{
+     if(!window.confirm('Only confirm if you checked that this parcel is included in the sale. For multi-parcel listings this outline is incomplete unless all tracts are included. Confirm GIS parcel '+id+'?'))return;
+     const current=shared.find(x=>x.id===propertyId);if(!current)return;
+     const g=f.geometry;
+     const selected={type:g.type,coordinates:g.coordinates,source:TX_PARCELS_LAYER,parcelId:id,matched:true,checkedAt:new Date().toISOString().slice(0,10),matchMethod:'user-confirmed GIS candidate at saved map pin',gisAcres:Math.round(acres*100)/100};
+     if(!boundaryRings({parcelBoundary:selected}).length){output.textContent='GIS geometry could not be validated.';return}
+     current.parcelBoundary=selected;queue('shared');renderPropertyDetails();
+     const box=$('detailParcelResult');if(box)box.textContent='GIS parcel '+id+' saved after confirmation. This is not a legal survey.';
+    };
+    item.append(' ',btn);
+   }else{item.append(' No stable parcel identifier — cannot mark GIS Matched.');}
+   output.append(item);
+  }
+ }catch(e){output.innerHTML='GIS lookup unavailable: '+esc(String(e.message||e))+'. This can be a county coverage, service, or browser CORS issue. <a href="'+esc(TX_PARCELS_LAYER)+'" target="_blank" rel="noopener noreferrer">Open GIS service ↗</a>';}
+}
 function tripSection(p){
  const trips=p.travelTimes||{};
  const keys=new Set(ROUTE_DESTINATIONS.map(x=>x[0]));
@@ -1471,7 +1581,7 @@ function masterGradeSections(p,scores){
       `<strong>Not Assessed.</strong> No supported automatic grade. ${facts.length?'Available information: '+facts.slice(0,3).map(f=>esc(f.label+': '+f.value)).join(' · '):'No criterion-specific evidence recorded.'}`;
    return `<div class="master-grade-row"><div class="master-grade-title"><label for="detail-score-${esc(c.key)}"><strong>${c.display_number}. ${esc(c.label)}</strong></label><span class="master-legacy">Score 0–5</span></div><div class="master-grade-result"><div class="score-controls"><span class="score-origin ${source==='Manual'?'is-manual':source==='Auto'?'is-auto':'is-unassessed'}">${source}</span><select id="detail-score-${esc(c.key)}" data-wishlist="${esc(c.key)}" aria-label="${esc(c.label)} grade"><option value="" ${override===null?'selected':''}>${auto.value===null?'Not Assessed':'Auto '+auto.value+'/5'}</option>${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${override===n?'selected':''}>${n} / 5</option>`).join('')}</select></div><div class="master-evidence">${explanation}</div></div></div>`;
  }).join('');
- return `<details class="master-category" data-master-section="${sec.section_id}" ${sec.section_id===1?'open':''}><summary>${sec.section_id}. ${esc(sec.section_name)} <span class="small">(${sec.criteria.length})</span><span class="master-section-stats" aria-label="${graded} of ${scored.length} graded: ${autoCount} automatic, ${manual} manual"><span class="stat">Graded ${graded}/${scored.length}</span><span class="stat auto">Auto ${autoCount}</span><span class="stat manual">Manual ${manual}</span></span></summary><div class="master-category-body">${rows}</div></details>`;
+ return `<details class="master-category" data-master-section="${sec.section_id}" ><summary>${sec.section_id}. ${esc(sec.section_name)} <span class="small">(${sec.criteria.length})</span><span class="master-section-stats" aria-label="${graded} of ${scored.length} graded: ${autoCount} automatic, ${manual} manual"><span class="stat">Graded ${graded}/${scored.length}</span><span class="stat auto">Auto ${autoCount}</span><span class="stat manual">Manual ${manual}</span></span></summary><div class="master-category-body">${rows}</div></details>`;
  }).join('');
 }
 function renderPropertyDetails() {
@@ -1501,21 +1611,21 @@ function renderPropertyDetails() {
     ${alertInfo(p)?`<div class="alert-panel ${esc(alertInfo(p).level)}"><strong>⚠ Research alert — ${alertInfo(p).level==='critical'?'Major conflict':'Minor conflict'}</strong><p>${esc(alertInfo(p).reason)}</p><p class="small">Source: ${esc(alertInfo(p).source||'Research import')}. This alert concerns conflicting information, not routine unverified listing claims.</p><button class="btn" type="button" id="resolveAlert">✓ Mark resolved with evidence</button></div>`:p.researchAlert?.resolved?`<div class="alert-panel"><strong>✓ Research alert resolved</strong><p>${esc(p.researchAlert.reason||'')}</p><p class="small">${esc(p.researchAlert.resolution||'')} · ${esc(p.researchAlert.resolvedAt||'')}</p><button class="btn" id="reopenAlert" type="button">Reopen alert</button></div>`:''}
     ${pilotResearch[p.id]?`<div class="notice"><strong>Research pilot available:</strong> Reviewed listing information for this Serious Inquiry. <button class="btn primary" id="applyPilotResearch" type="button">📋 Populate Researched Details</button><div class="small">Adds only missing fields; never overwrites your existing entries or manual scores. Review before relying on any listing claims.</div></div>`:''}
     <div class="detail-actions"><a class="btn primary" href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer">Open Original Listing ↗</a><button class="btn" type="button" id="detailResearch">${p.deepResearch?'🔎 Remove Research Flag':'🔎 Mark for Deep Research'}</button></div>
-    <details class="details-section" open><summary>🏡 Property Overview</summary><div class="details-body"><div class="small" style="margin-bottom:7px">Shared overview / observations · read only</div><div class="overview-readonly">${esc(d.overview?.summary||'No shared overview recorded.')}</div></div></details>
-    <details class="details-section" open><summary>⚔️ Master Property Assessment — 72 entries</summary><div class="details-body">
+    <details class="details-section"><summary>🏡 Property Overview</summary><div class="details-body"><div class="small" style="margin-bottom:7px">Shared overview / observations · read only</div><div class="overview-readonly">${esc(d.overview?.summary||'No shared overview recorded.')}</div></div></details>
+    <details class="details-section"><summary>⚔️ Master Property Assessment — 72 entries</summary><div class="details-body">
       <p class="detail-help">49 scored criteria (0–5) and 23 informational assessments, grouped interior → exterior → land → location → finance. Auto-grades require rubric-specific evidence; missing information is Not Assessed, not 0. Personal grades are private to each account. Historical evidence remains preserved internally; it is not separately scored.</p>
       ${dualBars(allTopicStats(p),p)}<div class="detail-meta"><strong id="detailScoreTotal">—</strong><span id="detailScoreCount"></span></div>
       ${masterGradeSections(p,scores)}
       <p class="detail-help">Each automatic grade explains its facts directly beside the control. A manual override never changes HQ's underlying evidence. Legacy points are not automatically reused under a different rubric.</p>
     </div></details>
     ${fieldBlocks[0]}
-    <details class="details-section"><summary>🗺️ Location & Parcel</summary><div class="details-body"><p class="small">${mapCoords(p)?'Saved location: '+mapCoords(p).join(', '):'Property coordinates not verified.'} · Parcel outlines require matched, verified GIS boundary data; a map pin is not a legal boundary.</p><button class="btn" type="button" id="detailOpenMap">View on property map</button> <a class="btn" href="${safeUrl(mapLink(p))}" target="_blank" rel="noopener noreferrer">Open map ↗</a><p class="small">${esc(boundaryLabel(p))}${p.parcelBoundary?.source?' · Source: '+esc(p.parcelBoundary.source):''}${p.parcelBoundary?.checkedAt?' · Checked: '+esc(String(p.parcelBoundary.checkedAt).slice(0,10)):''}. GIS lines are not legal surveys.</p></div></details>
-    <details class="details-section"><summary>🚗 Travel & Commute</summary><div class="details-body"><p class="small">Time and mileage populate from research imports. Verified means a cited route source, a checked date, and both measurements are recorded; otherwise HQ marks the estimate unverified. Directions open Google Maps; traffic may vary.</p>${tripSection(p)}</div></details>
+    <details class="details-section"><summary>🗺️ Location & Parcel</summary><div class="details-body"><p class="small">${mapCoords(p)?'Saved location: '+mapCoords(p).join(', '):'Property coordinates not verified.'} · Parcel outlines require matched, verified GIS boundary data; a map pin is not a legal boundary.</p><button class="btn" type="button" id="detailOpenMap">View on property map</button> <a class="btn" href="${safeUrl(mapLink(p))}" target="_blank" rel="noopener noreferrer">Open map ↗</a><p class="small">${esc(boundaryLabel(p))}${p.parcelBoundary?.source?' · Source: '+esc(p.parcelBoundary.source):''}${p.parcelBoundary?.checkedAt?' · Checked: '+esc(String(p.parcelBoundary.checkedAt).slice(0,10)):''}. GIS lines are not legal surveys.</p><div class="actionline"><button class="btn primary" type="button" id="detailParcelLookup">🔍 Find parcel in Texas GIS</button><a class="btn" href="https://geographic.texas.gov/stratmap/land-parcels.html" target="_blank" rel="noopener noreferrer">GIS data info ↗</a></div><div id="detailParcelResult" class="small" aria-live="polite"></div></div></details>
+    <details class="details-section"><summary>🚗 Travel & Commute</summary><div class="details-body"><p class="small">Calculate road-based distance and a no-live-traffic driving estimate with Google Maps Routes. API usage may be billed. Use a browser-referrer-restricted Google Maps Platform key (Maps JavaScript API + Routes API); it is saved only in this browser, never to Firebase. Rates reflect a routing estimate, not a guaranteed commute.</p><div class="route-setup"><label>Google Maps browser API key <input id="hqRoutesKey" type="password" autocomplete="off" placeholder="Paste restricted browser key" value="${esc(getRoutesKey())}"></label><div class="actionline"><button class="btn" id="hqRoutesSaveKey" type="button">Save key on this device</button><button class="btn archive" id="hqRoutesForgetKey" type="button">Forget key</button><button class="btn primary" id="hqRoutesCompute" type="button">🚗 Calculate routes for this property</button></div><div id="hqRoutesStatus" class="small" aria-live="polite"></div></div>${tripSection(p)}</div></details>
     <details class="details-section"><summary>📅 Listing History & HOA</summary><div class="details-body"><p class="small">Status: ${esc(listingStatus(p))} · Age: ${esc(ageClocks(p))} · Last verified: ${esc(verifiedDate(p)||'Unverified')}</p><label class="meta-field">Known listing start date <input id="detailListedOn" type="date" value="${esc(listedOn(p))}"></label><p class="small">Only enter a date supported by the original listing or MLS. A new date doesn't create a historical event.</p><p><strong>${hoaSummary(p)}</strong> · ${restrictionsSummary(p)||'Restrictions not verified'}</p>${historyHtml(p)}</div></details>
     ${fieldBlocks.slice(1).join('')}
     <details class="details-section"><summary>📝 Personal Evaluations</summary><div class="details-body"><div class="notesgrid"><label>My private notes (editable)<textarea id="detailMyNotes" placeholder="My observations…">${esc(notesOf(mine,p.id))}</textarea></label><label>${me.uid===OWNER?'Tiffany':'Rich'}'s notes (read only)<textarea readonly>${esc(notesOf(other,p.id))}</textarea></label></div></div></details>
     <details class="details-section"><summary>⚔️ War Council</summary><div class="details-body"><div class="rankgrid"><div class="rankbox">Rich<strong>${rich?'#'+rich:'—'}</strong></div><div class="rankbox">Tiffany<strong>${tiffany?'#'+tiffany:'—'}</strong></div><div class="rankbox">Combined<strong>${combined(p.id)===null?'—':'#'+combined(p.id).toFixed(1)}</strong></div></div><p class="small">Tier: ${esc(councilTier(p.id))}</p><label>My rank <input id="detailMyRank" class="rankinput" type="number" min="1" max="${shared.length}" value="${rankOf(mine,p.id)??''}" placeholder="Unranked"></label><button class="btn rankbtn direction" id="detailRankUp" type="button">↑ Top / Up</button><button class="btn rankbtn direction" id="detailRankDown" type="button">↓ Bottom / Down</button><button class="btn" type="button" id="detailClearRank">Clear rank</button>${discoveryTagged(p)?`<div class="reviewrow"><span class="small ${richReviewed(p)&&tiffanyReviewed(p)?'review-complete':'review-waiting'}">${esc(reviewStatus(p))} · Ranking counts as reviewed.</span><button class="btn" type="button" id="detailReviewed">${mine.reviewed?.[p.id]===true?'Undo my reviewed mark':'Mark reviewed / pass'}</button></div>`:''}</div></details>
-    <details class="details-section" ${p.deepResearch?'open':''}><summary>🔎 Research Discussion</summary><div class="details-body">${p.deepResearch?`<div id="detailResearchComments"><p class="small">Loading comments…</p></div><textarea id="detailResearchInput" maxlength="5000" placeholder="Share a research finding or question…"></textarea><button class="btn" id="detailPostComment" type="button">Post Comment</button>`:'<p class="small">Mark this property for Deep Research to enable shared comments.</p>'}</div></details>
+    <details class="details-section"><summary>🔎 Research Discussion</summary><div class="details-body">${p.deepResearch?`<div id="detailResearchComments"><p class="small">Loading comments…</p></div><textarea id="detailResearchInput" maxlength="5000" placeholder="Share a research finding or question…"></textarea><button class="btn" id="detailPostComment" type="button">Post Comment</button>`:'<p class="small">Mark this property for Deep Research to enable shared comments.</p>'}</div></details>
     <details class="details-section"><summary>📸 Optional Serious-Contender Photos</summary><div class="details-body"><p class="detail-help">Optional direct image URLs with captions. No uploads or Firebase Storage setup required.</p><div class="details-photos">${photos.map((photo,i)=>`<div class="details-photo-item"><img src="${safeUrl(photo.url)}" alt="${esc(photo.caption||'Property photo')}" loading="lazy"><p class="small">${esc(photo.caption||'Property photo')}</p><button class="btn archive" type="button" data-remove-photo="${i}">Remove</button></div>`).join('')}</div><div class="details-fields"><label>Image URL<input id="detailPhotoUrl" type="url" placeholder="https://..."></label><label>Caption<input id="detailPhotoCaption" placeholder="Workshop, porch, guest house…"></label></div><button class="btn" id="detailAddPhoto" type="button">Add Photo URL</button></div></details>
     <div class="detail-actions"><button class="btn" id="detailBackBottom" type="button">← Back to ${detailReturnView==='council'?'War Council':'Properties'}</button></div>`;
   root.dataset.renderedPropertyId=String(openPropertyId);
@@ -1544,6 +1654,11 @@ function renderPropertyDetails() {
   root.querySelectorAll('[data-wishlist]').forEach(el=>{el.disabled=!ratingsReady;el.onchange=()=>setPersonalRating(p.id,el.dataset.wishlist,el.value)});updateScore();
   $('detailMyNotes').oninput=el=>setNotes(p.id,el.target.value);
   if($('detailOpenMap'))$('detailOpenMap').onclick=()=>showPropertyMap(p.id);
+  if($('detailParcelLookup'))$('detailParcelLookup').onclick=()=>findParcelCandidate(p.id,$('detailParcelResult'));
+  if($('hqRoutesSaveKey'))$('hqRoutesSaveKey').onclick=()=>{const value=$('hqRoutesKey').value.trim();const box=$('hqRoutesStatus');if(!value){box.textContent='Enter a browser key first.';return}if(!setRoutesKey(value)){box.textContent='Browser storage is blocked; cannot save key.';return}box.textContent='Key saved on this device only. Google Cloud billing and API restrictions must already be configured.'};
+  if($('hqRoutesForgetKey'))$('hqRoutesForgetKey').onclick=()=>{setRoutesKey('');$('hqRoutesKey').value='';$('hqRoutesStatus').textContent='Key deleted from this browser. Reload the page to reset any already-loaded Google library.'};
+  if($('hqRoutesCompute'))$('hqRoutesCompute').onclick=async()=>{const btn=$('hqRoutesCompute'),status=$('hqRoutesStatus');btn.disabled=true;try{await computeTravelRoutes(p.id,status)}catch(e){const dest=$('hqRoutesStatus');if(dest)dest.textContent='Routing failed: '+String(e.message||e)}finally{const dest=$('hqRoutesCompute');if(dest)dest.disabled=false}};
+
   if($('detailListedOn'))$('detailListedOn').onchange=e=>{p.listedOn=e.target.value;queue('shared');render()};
   if($('resolveAlert'))$('resolveAlert').onclick=()=>resolveResearchAlert(p.id);if($('reopenAlert'))$('reopenAlert').onclick=()=>reopenResearchAlert(p.id);$('detailMyRank').onchange=el=>setRank(p.id,el.target.value);
   if($('detailReviewed'))$('detailReviewed').onclick=()=>setReviewed(p.id);$('detailClearRank').onclick=()=>setRank(p.id,'');$('detailRankUp').onclick=()=>nudgeRank(p.id,'up');$('detailRankDown').onclick=()=>nudgeRank(p.id,'down');

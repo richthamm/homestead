@@ -927,40 +927,91 @@ function validParcelFeature(f){
  if(!f||!['Polygon','MultiPolygon'].includes(f.geometry?.type)||!Array.isArray(f.geometry?.coordinates))return false;
  return boundaryRings({parcelBoundary:f.geometry}).length>0;
 }
+// Normalize Esri polygon rings to GeoJSON. Esri's outer rings are clockwise;
+// each inner ring belongs to its containing outer polygon.
+function esriParcelGeoJSON(geom){
+ if(!geom||!Array.isArray(geom.rings))return null;
+ const clean=geom.rings.map(r=>r.filter(pt=>Array.isArray(pt)&&Number.isFinite(+pt[0])&&Number.isFinite(+pt[1])).map(pt=>[+pt[0],+pt[1]])).filter(r=>r.length>=3);
+ const close=r=>{const out=r.slice();if(out[0][0]!==out[out.length-1][0]||out[0][1]!==out[out.length-1][1])out.push(out[0].slice());return out};
+ const signed=r=>r.reduce((a,pt,i)=>{const next=r[(i+1)%r.length];return a+pt[0]*next[1]-next[0]*pt[1]},0);
+ const pointInRing=(pt,ring)=>{let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+  const a=ring[i],b=ring[j];if((a[1]>pt[1])!==(b[1]>pt[1])&&pt[0]<(b[0]-a[0])*(pt[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside;
+ }return inside};
+ const outers=[],holes=[];
+ for(const raw of clean){const ring=close(raw);(signed(ring)<0?outers:holes).push(ring)}
+ // Some servers reverse the ring winding or return one exterior as CCW.
+ if(!outers.length&&holes.length){outers.push(holes.shift())}
+ const groups=outers.map(r=>[r]);
+ for(const hole of holes){let owner=-1,smallest=Infinity;
+  for(let i=0;i<groups.length;i++)if(pointInRing(hole[0],groups[i][0])){const size=Math.abs(signed(groups[i][0]));if(size<smallest){smallest=size;owner=i}}
+  if(owner<0)groups.push([hole]);else groups[owner].push(hole);
+ }
+ if(!groups.length)return null;
+ return groups.length===1?{type:'Polygon',coordinates:groups[0]}:{type:'MultiPolygon',coordinates:groups};
+}
+function gisResultFeatures(result){
+ if(Array.isArray(result?.features))return result.features.map(f=>{
+  if(f?.type==='Feature'&&f.geometry?.coordinates)return f;
+  const props=f.attributes||f.properties||{};
+  const geometry=f.geometry?.rings?esriParcelGeoJSON(f.geometry):f.geometry;
+  return {type:'Feature',properties:props,geometry};
+ });
+ if(Array.isArray(result?.results))return result.results.map(f=>({type:'Feature',properties:f.attributes||{},geometry:esriParcelGeoJSON(f.geometry)}));
+ return [];
+}
+async function gisRequest(url){
+ const response=await fetch(url,{mode:'cors',headers:{Accept:'application/json'}});
+ if(!response.ok)throw Error('HTTP '+response.status);
+ const result=await response.json();
+ if(result?.error)throw Error((result.error.message||'ArcGIS error')+(result.error.details?.length?' — '+result.error.details.join('; '):''));
+ return result;
+}
 async function findParcelCandidate(propertyId,output){
  const p=shared.find(x=>x.id===propertyId);if(!p)return;
  const pos=mapCoords(p);
  if(!pos){output.textContent='This property has no usable coordinates. First research or enter an accurate parcel location; an address alone cannot safely identify the correct polygon.';return}
- output.textContent='Searching Texas statewide appraisal parcel GIS for the saved map pin…';
- const params=new URLSearchParams({f:'geojson',where:'1=1',geometry:pos[1]+','+pos[0],geometryType:'esriGeometryPoint',inSR:'4326',spatialRel:'esriSpatialRelIntersects',outFields:'*',outSR:'4326',returnGeometry:'true'});
- try{
-  const response=await fetch(TX_PARCELS_LAYER+'/query?'+params,{mode:'cors'});
-  if(!response.ok)throw Error('GIS service HTTP '+response.status);
-  const result=await response.json();if(result.error)throw Error(result.error.message||'GIS service error');
-  const features=(result.features||[]).filter(validParcelFeature).slice(0,8);
-  if(!features.length){output.innerHTML='No parcel polygon found at this saved pin. It may be approximate, the county may not be covered, or the dataset may be outdated. <a href="'+esc(TX_PARCELS_LAYER)+'" target="_blank" rel="noopener">Inspect GIS service ↗</a>';return}
-  output.innerHTML='<p><strong>'+features.length+' GIS candidate(s)</strong> at the saved pin. These are candidates only, not verified matches. Confirm parcel ID, listing acreage and included tracts before saving. GIS is not a survey.</p>';
-  for(const f of features){
-   const id=gisParcelId(f.properties),acres=polygonAreaAcres(f.geometry),ratio=p.acres?Math.abs(acres-p.acres)/p.acres:null;
-   const item=document.createElement('div');item.className='detail-note';
-   const warning=ratio!==null&&ratio>.20?' ⚠ Significant difference from listing acreage.':'';
-   item.textContent='Parcel '+(id||'(identifier not supplied)')+' · approx. '+acres.toFixed(2)+' GIS acres vs '+(p.acres??'unknown')+' listed acres.'+warning;
-   if(id){
-    const btn=document.createElement('button');btn.className='btn';btn.type='button';btn.textContent='Confirm this parcel matches the listing';
-    btn.onclick=()=>{
-     if(!window.confirm('Only confirm if you checked that this parcel is included in the sale. For multi-parcel listings this outline is incomplete unless all tracts are included. Confirm GIS parcel '+id+'?'))return;
-     const current=shared.find(x=>x.id===propertyId);if(!current)return;
-     const g=f.geometry;
-     const selected={type:g.type,coordinates:g.coordinates,source:TX_PARCELS_LAYER,parcelId:id,matched:true,checkedAt:new Date().toISOString().slice(0,10),matchMethod:'user-confirmed GIS candidate at saved map pin',gisAcres:Math.round(acres*100)/100};
-     if(!boundaryRings({parcelBoundary:selected}).length){output.textContent='GIS geometry could not be validated.';return}
-     current.parcelBoundary=selected;queue('shared');renderPropertyDetails();
-     const box=$('detailParcelResult');if(box)box.textContent='GIS parcel '+id+' saved after confirmation. This is not a legal survey.';
-    };
-    item.append(' ',btn);
-   }else{item.append(' No stable parcel identifier — cannot mark GIS Matched.');}
-   output.append(item);
-  }
- }catch(e){output.innerHTML='GIS lookup unavailable: '+esc(String(e.message||e))+'. This can be a county coverage, service, or browser CORS issue. <a href="'+esc(TX_PARCELS_LAYER)+'" target="_blank" rel="noopener noreferrer">Open GIS service ↗</a>';}
+ const [lat,lon]=pos;
+ output.textContent='Searching Texas appraisal parcel GIS at the saved property pin…';
+ const base={geometry:lon+','+lat,geometryType:'esriGeometryPoint',sr:'4326',inSR:'4326',outSR:'4326',spatialRel:'esriSpatialRelIntersects'};
+ const query=new URLSearchParams({...base,f:'json',where:'1=1',outFields:'prop_id,geo_id,situs_addr,county,gis_area,gis_area_unit,legal_area,lgl_area_unit',returnGeometry:'true'});
+ let result=null,failures=[];
+ try{result=await gisRequest(TX_PARCELS_LAYER+'/query?'+query)}catch(err){failures.push('Parcel query: '+String(err.message||err))}
+ // Some government ArcGIS deployments advertise Query but reject its execution.
+ // Fall back to the MapServer Identify operation using a small envelope around the same pin.
+ if(!gisResultFeatures(result).some(validParcelFeature)){
+  const dx=.001,dy=.001;
+  const identify=new URLSearchParams({f:'json',geometry:lon+','+lat,geometryType:'esriGeometryPoint',sr:'4326',layers:'all:0',tolerance:'4',mapExtent:[lon-dx,lat-dy,lon+dx,lat+dy].join(','),imageDisplay:'700,700,96',returnGeometry:'true',maxAllowableOffset:'0'});
+  try{const identified=await gisRequest(TX_PARCELS_LAYER.replace(/\/0$/,'')+'/identify?'+identify);if(gisResultFeatures(identified).some(validParcelFeature))result=identified;else if(!result)result=identified}
+  catch(err){failures.push('Map identification: '+String(err.message||err))}
+ }
+ const features=gisResultFeatures(result).filter(validParcelFeature).slice(0,8);
+ if(!features.length){
+  const msg=failures.length===2?'The Texas GIS server rejected both supported lookup methods. This is a service-side limitation or temporary outage, not proof that the property lacks parcel data. '+failures.join(' | '):'No matching parcel polygon was returned for the saved pin. The pin may be approximate or the parcel may not be included in this dataset.';
+  output.innerHTML=esc(msg)+' <a href="'+esc(TX_PARCELS_LAYER)+'" target="_blank" rel="noopener noreferrer">Open Texas parcel GIS ↗</a>';
+  return;
+ }
+ output.innerHTML='<p><strong>'+features.length+' GIS candidate(s)</strong> at the saved pin. These are candidates only, not verified matches. Confirm parcel ID, listing acreage and included tracts before saving. GIS is not a survey.</p>';
+ for(const f of features){
+  const id=gisParcelId(f.properties),acres=polygonAreaAcres(f.geometry),ratio=p.acres?Math.abs(acres-p.acres)/p.acres:null;
+  const item=document.createElement('div');item.className='detail-note';
+  const warning=ratio!==null&&ratio>.20?' ⚠ Significant difference from listing acreage.':'';
+  const addr=f.properties?.situs_addr?' · GIS address: '+String(f.properties.situs_addr):'';
+  item.textContent='Parcel '+(id||'(identifier not supplied)')+' · approx. '+acres.toFixed(2)+' GIS acres vs '+(p.acres??'unknown')+' listed acres.'+addr+warning;
+  if(id){
+   const btn=document.createElement('button');btn.className='btn';btn.type='button';btn.textContent='Confirm this parcel matches the listing';
+   btn.onclick=()=>{
+    if(!window.confirm('Only confirm if you checked that this parcel is included in the sale. For multi-parcel listings this outline is incomplete unless all tracts are included. Confirm GIS parcel '+id+'?'))return;
+    const current=shared.find(x=>x.id===propertyId);if(!current)return;
+    const g=f.geometry;
+    const selected={type:g.type,coordinates:g.coordinates,source:TX_PARCELS_LAYER,parcelId:id,matched:true,checkedAt:new Date().toISOString().slice(0,10),matchMethod:'user-confirmed GIS candidate at saved map pin',gisAcres:Math.round(acres*100)/100};
+    if(!boundaryRings({parcelBoundary:selected}).length){output.textContent='GIS geometry could not be validated.';return}
+    current.parcelBoundary=selected;queue('shared');renderPropertyDetails();
+    const box=$('detailParcelResult');if(box)box.textContent='GIS parcel '+id+' saved after confirmation. This is not a legal survey.';
+   };
+   item.append(' ',btn);
+  }else{item.append(' No stable parcel identifier — cannot mark GIS Matched.');}
+  output.append(item);
+ }
 }
 function tripSection(p){
  const trips=p.travelTimes||{};

@@ -123,10 +123,12 @@
 .card-evidence-heading{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#a9c0ae;margin:1px 0 6px;font-weight:760}
 .card-evidence-grading-row{font-size:12px;line-height:1.45;padding:7px 3px;border-bottom:1px solid #31463c;overflow-wrap:anywhere}
 .card-evidence-grading-row:last-child{border-bottom:0}
-.wishlist-evidence-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:9px;padding:6px 3px;font-size:12px;border-bottom:1px solid #31463c}
+.wishlist-evidence-row{display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:9px 3px;font-size:12px;border-bottom:1px solid #31463c}
 .wishlist-evidence-row:last-child{border-bottom:0}
 .wishlist-evidence-row .wishlist-feature-name{min-width:0;overflow-wrap:anywhere;color:#edf3ec}
 .wishlist-evidence-score{white-space:nowrap;color:#c7ddab;font-weight:800}
+.card-grade-description{font-size:11px;line-height:1.4;color:#b9c9bc;overflow-wrap:anywhere}
+.wishlist-evidence-row .wishlist-evidence-score{display:block;width:fit-content}
 .wishlist-evidence-score.overridden{color:#e6be80}
 .card-grade-origin{font-size:10px;font-weight:800;letter-spacing:.03em;border-radius:5px;padding:2px 6px;white-space:nowrap}
 .card-grade-origin.auto{color:#c7ddab;border:1px solid #72945e;background:#253b2c}
@@ -207,6 +209,31 @@
 .master-item-comment{display:block;flex:0 0 100%;width:100%;box-sizing:border-box;min-height:34px;max-height:220px;resize:vertical;margin-top:8px;padding:7px 10px;border:1px solid #526a5c;border-radius:7px;background:#1c2926;color:#edf2eb;font:inherit;font-size:13px;overflow-y:auto}
 .card-grade-description{flex:0 0 100%;font-size:12px;color:#c5d9c4;line-height:1.45;margin-top:3px;overflow-wrap:anywhere}
 .score-controls select{max-width:100%;min-width:220px}
+
+/* v3.2 card master grades: fixed vertical score column between criterion and rubric. */
+.card-evidence-panel .wishlist-evidence-row{
+  display:grid;
+  grid-template-columns:minmax(115px,1.1fr) 54px minmax(130px,1.45fr);
+  align-items:start;
+  column-gap:12px;
+  row-gap:3px;
+  padding:9px 3px;
+}
+.card-evidence-panel .wishlist-evidence-row .wishlist-feature-name{grid-column:1;min-width:0;}
+.card-evidence-panel .wishlist-evidence-row .wishlist-evidence-score{
+  grid-column:2;display:block;width:auto;white-space:nowrap;text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+.card-evidence-panel .wishlist-evidence-row .card-grade-description{
+  grid-column:3;display:block;flex:none;margin:0;min-width:0;
+}
+@media(max-width:480px){
+  .card-evidence-panel .wishlist-evidence-row{
+    grid-template-columns:minmax(90px,1fr) 43px minmax(95px,1.25fr);
+    column-gap:7px;
+  }
+  .card-evidence-panel .wishlist-evidence-row .card-grade-description{font-size:11px;}
+}
 </style></head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.2     </span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
 <details id="hqDisclaimer" class="hq-disclaimer">
   <summary>⚠️ Data &amp; scoring notes <span class="small">Research and map limitations</span></summary>
@@ -1516,7 +1543,7 @@ function wishlistEvidenceCard(p, openCardEvidence){
     if(auto.value===null&&override===null)return null;
     return {key,label,grade:override===null?auto.value:override,overridden:override!==null};
   }).filter(Boolean);
-  const content=entries.length?entries.map(e=>`<div class="wishlist-evidence-row"><span class="wishlist-feature-name">${esc(e.label)}</span><span class="wishlist-evidence-score${e.overridden?' overridden':''}" title="${e.overridden?'My manual rating':'Automatic grade'}">${e.grade}/5</span><span class="card-grade-origin ${e.overridden?'manual':'auto'}">${e.overridden?'MANUAL':'AUTO'}</span><div class="card-grade-description">${esc(masterGradeDescription(criterionByKey[e.key],e.grade))}</div></div>`).join(''):'<p class="card-evidence-empty">No master criteria scored yet.</p>';
+  const content=entries.length?entries.map(e=>`<div class="wishlist-evidence-row"><span class="wishlist-feature-name">${esc(e.label)}</span><span class="wishlist-evidence-score${e.overridden?' overridden':''}" title="${e.overridden?'My manual rating':'Automatic grade'}">${e.grade}/5</span><span class="card-grade-description">${esc(masterGradeDescription(criterionByKey[e.key],e.grade))}</span></div>`).join(''):'<p class="card-evidence-empty">No master criteria scored yet.</p>';
   return `<div class="card-evidence-panel" id="card-wishlist-${esc(p.id)}" data-evidence-panel="${esc(p.id)}:wishlist" ${openCardEvidence.has(p.id+':wishlist')?'':'hidden'}><div class="card-evidence-heading">Master grades · ${entries.length} rated</div><div class="card-grade-legend"><span class="card-grade-origin auto">AUTO</span> Evidence-based grade <span class="card-grade-origin manual">MANUAL</span> Your override</div>${content}</div>`;
 }
 // These are the 45 scored topics from the ORIGINAL wishlist (not dynamically derived

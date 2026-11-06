@@ -46,7 +46,7 @@
 
 .offline-map-toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:13px 0 8px}
 .offline-map-canvas{height:min(72vh,720px);min-height:400px;border-radius:13px;border:1px solid #496252;overflow:hidden;background:#2a4039;position:relative}
-.offline-map-canvas svg{width:100%;height:100%;display:block}
+#offlineMapSvg{width:100%;height:100%;display:block}
 .overview-basemap-ready .overview-grid-line,.overview-basemap-ready .overview-coord{opacity:0!important}
 .overview-grid-line{stroke:#b6c1b2;stroke-width:1;stroke-dasharray:5 13;opacity:.22;pointer-events:none}
 .overview-coord{fill:#a8bbad;font:14px system-ui,sans-serif;letter-spacing:.04em;opacity:.6;pointer-events:none}
@@ -203,11 +203,11 @@
 /* Interactive property-only aerial explorer and regional map with static fallback. */
 #parcelExplorerOverlay{position:fixed;inset:0;z-index:1100;background:#07100de8;display:flex;align-items:center;justify-content:center;padding:18px}
 #parcelExplorerPanel{width:min(1150px,100%);height:min(850px,95vh);display:flex;flex-direction:column;background:#172720;border:1px solid #829e89;border-radius:12px;overflow:hidden;box-shadow:0 15px 70px #000a}
-#parcelExplorerBar{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 15px;flex-wrap:wrap}
-#parcelExplorerMap{flex:1;min-height:250px;background:#27372d}
-#parcelExplorerTools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#parcelExplorerBar{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 15px;flex-wrap:wrap;position:relative;z-index:2000;background:#172720;flex-shrink:0;isolation:isolate}
+#parcelExplorerMap{flex:1;min-height:250px;background:#27372d;position:relative;z-index:0;isolation:isolate;overflow:hidden}
+#parcelExplorerTools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative;z-index:2001}
 #parcelExplorerTools button{cursor:pointer}
-#parcelExplorerInfo{font-size:12px;color:#d0dbc9;padding:7px 15px;border-top:1px solid #405847}
+#parcelExplorerInfo{font-size:12px;color:#d0dbc9;padding:7px 15px;border-top:1px solid #405847;position:relative;z-index:2000;background:#172720;flex-shrink:0}
 #parcelExplorerPanel .leaflet-container{font-family:inherit}
 /* Region map markers are HTML overlays: they do not scale with map zoom. */
 #propertyMapCanvas .leaflet-container{height:100%;width:100%;background:#2b4037}
@@ -246,7 +246,7 @@
   <div class="toolbar hq-filter-toolbar"><input id="search" placeholder="Search address, town, features, notes…"><select id="group"><option value="all">All collections</option><option value="Serious inquiry">Serious inquiries</option><option value="Favorite">Favorites</option><option value="New discovery">New discoveries</option><option value="Watchlist">Watchlist</option></select><select id="sort"><option value="priority">Priority / discovery</option><option value="mine">My rankings</option><option value="other">Partner's rankings</option><option value="combined">Combined rankings</option><option value="grade">Overall match %</option><option value="priceasc">Price: low to high</option><option value="pricedesc">Price: high to low</option><option value="acres">Most acreage</option></select><select id="rankfilter"><option value="all">All ranking statuses</option><option value="mine-unranked">Unranked by me</option><option value="mine-ranked">Ranked by me</option><option value="other-unranked">Unranked by partner</option><option value="other-ranked">Ranked by partner</option><option value="both-ranked">Ranked by both</option></select><select id="acre"><option value="0">Any acreage</option><option value="5">5+ acres</option><option value="10">10+ acres</option><option value="20">20+ acres</option></select><select id="decisionfilter"><option value="tracking">Tracking (default)</option><option value="all">All decisions</option><option value="Active">Active</option><option value="On Hold">On hold</option><option value="Rejected">Rejected / archive</option></select></div>
 </div>
 
-<section id="propertyMapPage" class="hidden" aria-label="Lightweight regional property map"><div class="sectionbar"><h2>🗺️ Property Map</h2><button class="btn" id="closeMap" type="button">← Back to properties</button></div><div class="small">Interactive regional road map: zoom and drag to separate property markers. Nearby properties group into numbered clusters; click a cluster to zoom in. If the interactive map cannot load, HQ restores the previous static map. Coordinates are approximate, not legal boundaries.</div><div class="offline-map-legend"><span><i class="legend-dot watchlist"></i> Watchlist</span><span><i class="legend-dot favorite"></i> HQ Favorite</span><span><i class="legend-dot serious"></i> Serious Inquiry</span></div><div class="offline-map-toolbar"><button class="btn" id="offlineMapZoomOut" type="button" aria-label="Zoom out">−</button><button class="btn" id="offlineMapZoomIn" type="button" aria-label="Zoom in">＋</button><button class="btn" id="offlineMapReset" type="button">Show all properties</button><label class="map-boundary-toggle"><input id="mapBoundaryToggle" type="checkbox" checked> Show parcel boundaries</label><span class="small" id="offlineMapZoomLabel">100%</span></div><div id="propertyMapCanvas" class="offline-map-canvas" aria-label="Central Texas map with interactive property locations"></div><div id="offlineMapSelection" class="offline-map-selection small" aria-live="polite">Select a pin to see property details. Listing status describes market availability, not pin accuracy.</div><p id="mapNeedsLocation" class="small"></p><div id="mapLocationFallback" class="small" aria-live="polite"></div></section><section id="warCouncil" class="workspace-panel hidden" aria-label="War Council">
+<section id="propertyMapPage" class="hidden" aria-label="Lightweight regional property map"><div class="sectionbar"><h2>🗺️ Property Map</h2><button class="btn" id="closeMap" type="button">← Back to properties</button></div><div class="small">Interactive regional road map: zoom and drag to separate property markers. Nearby properties group into numbered clusters; click a cluster to zoom in. If the interactive map cannot load, HQ restores the previous static map. Coordinates are approximate, not legal boundaries.</div><div class="offline-map-legend"><span><i class="legend-dot watchlist"></i> Watchlist</span><span><i class="legend-dot favorite"></i> HQ Favorite</span><span><i class="legend-dot serious"></i> Serious Inquiry</span></div><div class="offline-map-toolbar"><button class="btn" id="offlineMapZoomOut" type="button" aria-label="Zoom out">−</button><button class="btn" id="offlineMapZoomIn" type="button" aria-label="Zoom in">＋</button><button class="btn" id="offlineMapReset" type="button">Show all properties</button><label class="map-boundary-toggle"><input id="mapBoundaryToggle" type="checkbox"> Show parcel boundaries</label><span class="small" id="offlineMapZoomLabel">100%</span></div><div id="propertyMapCanvas" class="offline-map-canvas" aria-label="Central Texas map with interactive property locations"></div><div id="offlineMapSelection" class="offline-map-selection small" aria-live="polite">Select a pin to see property details. Listing status describes market availability, not pin accuracy.</div><p id="mapNeedsLocation" class="small"></p><div id="mapLocationFallback" class="small" aria-live="polite"></div></section><section id="warCouncil" class="workspace-panel hidden" aria-label="War Council">
   <div class="sectionbar">
     <h2>⚔️ The War Council</h2>
     <span class="small">Rich & Tiffany's combined rankings</span>
@@ -904,15 +904,28 @@ async function openParcelExplorer(id){
  parcelExplorerEscape=e=>{if(e.key==='Escape')closeParcelExplorer()};document.addEventListener('keydown',parcelExplorerEscape);
  try{
   const L=await loadLeafletExplorer();if(!document.getElementById('parcelExplorerOverlay'))return;
-  const map=L.map('parcelExplorerMap',{zoomControl:true,maxZoom:19});parcelExplorerMap=map;
+  const map=L.map('parcelExplorerMap',{zoomControl:true,maxZoom:19,zoomSnap:1,zoomAnimation:false,fadeAnimation:false});parcelExplorerMap=map;
   const imagery=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',{attribution:'Imagery: USGS The National Map',maxNativeZoom:16,maxZoom:19});
   const streets=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19});
+  let imageryLoaded=false,imageryFailed=0;
+  imagery.on('tileload',()=>{imageryLoaded=true});
+  imagery.on('tileerror',()=>{if(!imageryLoaded&&++imageryFailed>=4&&map.hasLayer(imagery)){map.removeLayer(imagery);streets.addTo(map);const info=document.getElementById('parcelExplorerInfo');if(info)info.textContent='USGS aerial tiles unavailable; showing road map. '+info.textContent;}});
   imagery.addTo(map);L.control.layers({'USGS aerial':imagery,'Street map':streets},null,{position:'topright'}).addTo(map);
   const b=p.parcelBoundary;let shape=null;
   if(boundaryRings(p).length){
    shape=L.geoJSON({type:'Feature',properties:{},geometry:{type:b.type,coordinates:b.coordinates}},{style:{color:'#ffca72',weight:3,fillColor:'#ffca72',fillOpacity:0.10}}).addTo(map);
   }else{L.marker(c).addTo(map).bindPopup('Approximate property location — boundary not matched.');}
-  const fit=()=>{if(shape&&shape.getBounds().isValid())map.fitBounds(shape.getBounds(),{padding:[32,32],maxZoom:18});else map.setView(c,17)};
+  // Load only a neighborhood around this property, not a statewide extent.
+  // Bound the pan region while leaving generous space around the entire parcel.
+  const parcelArea=shape&&shape.getBounds().isValid()?shape.getBounds():L.latLngBounds([c[0]-.025,c[1]-.035],[c[0]+.025,c[1]+.035]);
+  const paddedArea=parcelArea.pad(1.0);
+  const minLatSpan=.05,minLngSpan=.07;
+  const mid=paddedArea.getCenter();
+  const bounded=L.latLngBounds(
+   [Math.min(paddedArea.getSouth(),mid.lat-minLatSpan/2),Math.min(paddedArea.getWest(),mid.lng-minLngSpan/2)],
+   [Math.max(paddedArea.getNorth(),mid.lat+minLatSpan/2),Math.max(paddedArea.getEast(),mid.lng+minLngSpan/2)]);
+  map.setMaxBounds(bounded);
+  const fit=()=>{if(shape&&shape.getBounds().isValid())map.fitBounds(shape.getBounds(),{padding:[32,32],maxZoom:18,animate:false});else map.setView(c,17,{animate:false})};
   document.getElementById('parcelExplorerFit').onclick=fit;
   document.getElementById('parcelExplorerHouse').onclick=()=>map.setView(c,18);
   fit();setTimeout(()=>map.invalidateSize(),100);
@@ -1945,8 +1958,8 @@ async function drawInteractiveRegionMap(located,focusId){
   L.control.zoom({position:'topright'}).addTo(map);
   // No API key. OSM tiles are community provided and must be used according to their policy.
   // USGS topo is the no-key alternate if OSM tiles cannot be displayed.
-  const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19});
-  const usgs=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',{attribution:'USGS The National Map',maxNativeZoom:16,maxZoom:19});
+  const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19,keepBuffer:1,updateWhenIdle:true});
+  const usgs=L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',{attribution:'USGS The National Map',maxNativeZoom:16,maxZoom:19,keepBuffer:1,updateWhenIdle:true});
   let firstTile=false,errors=0,fallbackBasemap=false;
   const tileTimer=setTimeout(()=>{if(!firstTile&&generation===regionMapGeneration&&mapActive){fallbackRegionMap(located,'Interactive map tiles did not load; using the reliable overview map.')}},8500);
   osm.on('tileload',()=>{firstTile=true;clearTimeout(tileTimer)});
@@ -1955,7 +1968,12 @@ async function drawInteractiveRegionMap(located,focusId){
   L.control.layers({'OpenStreetMap roads':osm,'USGS topographic':usgs},null,{position:'topright'}).addTo(map);
   regionPins=L.layerGroup().addTo(map);regionBoundaryLayer=L.layerGroup().addTo(map);
   const points=located.map(p=>mapCoords(p)).filter(Boolean);
-  map.fitBounds(L.latLngBounds(points),{padding:[30,30],maxZoom:13});
+  // Leaflet fetches only visible map tiles. Fit the actual HQ search footprint
+  // and restrict panning to a modest buffer around plotted properties.
+  const footprint=L.latLngBounds(points);
+  map.fitBounds(footprint,{padding:[30,30],maxZoom:13,animate:false});
+  map.setMaxBounds(footprint.pad(.30));
+  map.setMinZoom(Math.max(2,map.getZoom()-1));
   map.on('zoomend moveend',()=>{if(regionMap===map){renderRegionPins(located);$('offlineMapZoomLabel').textContent='Zoom '+map.getZoom()}});
   renderRegionPins(located);updateRegionBoundaries(located);regionInteractiveReady=true;
   setTimeout(()=>{if(regionMap===map)map.invalidateSize()},100);

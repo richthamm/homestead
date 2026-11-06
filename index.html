@@ -265,6 +265,18 @@
   }
   .card-evidence-panel .wishlist-evidence-row .card-grade-description{font-size:11px;}
 }
+
+/* War Council: compact, collapsible tier and research sections. */
+.council-accordion{margin:13px 0;border:1px solid #566a59;border-radius:12px;background:#1b2924;overflow:hidden}
+.council-accordion>summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:15px 17px;cursor:pointer;list-style:none}
+.council-accordion>summary::-webkit-details-marker{display:none}
+.council-accordion>summary:before{content:'▸';color:#b9c8a9;flex:0 0 auto}
+.council-accordion[open]>summary:before{content:'▾'}
+.council-heading{font-size:16px;font-weight:700;min-width:155px}
+.council-criteria{font-size:12px;color:#c2cbbd;flex:1 1 300px;line-height:1.5}
+.council-count{font-size:12px;color:#d4e3c6;white-space:nowrap}
+.council-accordion-body{padding:6px 15px 15px;border-top:1px solid #435449}
+@media(max-width:650px){.council-accordion>summary{align-items:flex-start}.council-criteria{flex-basis:100%;padding-left:18px}.council-count{margin-left:auto}}
 </style></head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.2     </span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
 <details id="hqDisclaimer" class="hq-disclaimer">
   <summary>⚠️ Data &amp; scoring notes <span class="small">Research and map limitations</span></summary>
@@ -1355,66 +1367,29 @@ $('warCouncilContent').addEventListener('click', event => {
   else if (button.dataset.editComment) editResearchComment(button.dataset.property, button.dataset.editComment);
   else if (button.dataset.deleteComment) deleteResearchComment(button.dataset.property, button.dataset.deleteComment);
 });
+const councilCriteria = {
+  'Deep Research': 'An active property flagged by either person for further investigation. Flagging does not launch automated research.',
+  'S Tier · Mutual Favorites': 'Both Rich and Tiffany rank the property in their Top 5.',
+  'A Tier': 'Both rank the property in their Top 10, but they are not both in the Top 5.',
+  'B Tier': 'Both have ranked the property, neither has it in their Top 10.',
+  'Split Decision': 'One person ranks the property in their Top 10 while the other does not.',
+  "Awaiting Partner's Ranking": 'At least one person has not assigned a ranking yet.'
+};
+function councilAccordion(title, icon, count, contents, description='') {
+  return `<details class="council-accordion" data-council-section="${esc(title)}">
+    <summary><span class="council-heading">${icon} ${esc(title)}</span><span class="council-criteria">${esc(councilCriteria[title] || description)}</span><span class="council-count">${count} properties</span></summary>
+    <div class="council-accordion-body">${contents}</div>
+  </details>`;
+}
 function renderWarCouncil() {
   const container = $('warCouncilContent');
   if (!container || !ready) return;
-const mutualFavorites = shared
-  .filter(p => (p.decision || 'Active') === 'Active')
-  .filter(p => {
-    const richRank = rankOf(
-      me.uid === OWNER ? mine : other, p.id
-    );
-    const tiffanyRank = rankOf(
-      me.uid === OWNER ? other : mine, p.id
-    );
-
-    return richRank !== null && richRank <= 5 &&
-           tiffanyRank !== null && tiffanyRank <= 5;
-  });
-
-const favoritesHTML = `
-  <section style="margin:24px 0">
-    <div class="sectionbar">
-      <h2>❤️ Mutual Favorites</h2>
-      <span class="small">${mutualFavorites.length} properties</span>
-    </div>
-    <p class="small">
-      Properties ranked in both Rich and Tiffany's Top 5.
-    </p>
-    ${mutualFavorites.map(p => `
-      <div class="card" style="padding:15px;margin-bottom:10px">
-        <h3>${esc(p.address)}</h3>
-        <div class="city">${esc(p.city)}, Texas</div>
-        <div class="price">${money(p.price)}</div>
-        <div class="facts">
-          <span>🌲 ${fmt(p.acres)} acres</span>
-          <span>Rich: #${rankOf(me.uid === OWNER ? mine : other, p.id)}</span>
-          <span>Tiffany: #${rankOf(me.uid === OWNER ? other : mine, p.id)}</span>
-        </div>
-        <div class="actionline">
-          <a class="btn" href="${safeUrl(p.url)}"
-             target="_blank" rel="noopener noreferrer">
-            View Listing
-          </a><button class="btn" type="button" data-council-details="${esc(p.id)}">Property Details</button>
-        </div>
-      </div>
-    `).join('') || '<p class="small">No mutual favorites yet.</p>'}
-  </section>
-`;
   const researchProperties = shared.filter(
   p => p.deepResearch === true &&
        (p.decision || 'Active') === 'Active'
 );
 
-const researchHTML = `
-  <section style="margin:24px 0">
-    <div class="sectionbar">
-      <h2>🔎 Deep Research</h2>
-      <span class="small">${researchProperties.length} properties</span>
-    </div>
-    <p class="small">
-      Properties flagged by Rich or Tiffany for further investigation.
-    </p>
+const researchHTML = councilAccordion('Deep Research', '🔎', researchProperties.length, `
     ${researchProperties.map(p => `
       <div class="card" style="padding:15px;margin-bottom:10px">
         <h3>${esc(p.address)}</h3>
@@ -1438,8 +1413,7 @@ const researchHTML = `
         </div>
       </div>
     `).join('') || '<p class="small">No properties flagged for research yet.</p>'}
-  </section>
-`;
+  `);
   const tiers = [
     ['S Tier', '🏆', 'Elite Contenders'],
     ['A Tier', '⚔️', 'Strong Contenders'],
@@ -1452,7 +1426,8 @@ const researchHTML = `
     p => (p.decision || 'Active') === 'Active'
   );
 
-  container.innerHTML = favoritesHTML + researchHTML + tiers.map(([tier, icon, description]) => {
+  const openSections = new Set([...container.querySelectorAll('details.council-accordion[open]')].map(el => el.dataset.councilSection));
+  container.innerHTML = researchHTML + tiers.map(([tier, icon, description]) => {
     const properties = activeProperties
       .filter(p => councilTier(p.id) === tier)
       .sort((a, b) =>
@@ -1489,17 +1464,9 @@ const researchHTML = `
       `;
     }).join('');
 
-    return `
-      <section style="margin:24px 0">
-        <div class="sectionbar">
-          <h2>${icon} ${tier}</h2>
-          <span class="small">${properties.length} properties</span>
-        </div>
-        <p class="small">${description}</p>
-        ${propertyRows || '<p class="small">No properties in this tier yet.</p>'}
-      </section>
-    `;
+    return councilAccordion(tier === 'S Tier' ? 'S Tier · Mutual Favorites' : tier === 'Unranked' ? "Awaiting Partner's Ranking" : tier, icon, properties.length, propertyRows || '<p class="small">No properties in this tier yet.</p>', description);
   }).join('');
+  container.querySelectorAll('details.council-accordion').forEach(el => { if (openSections.has(el.dataset.councilSection)) el.open = true; });
   const activeResearchIds = new Set(researchProperties.map(p => p.id));
   for (const [id, unsubscribe] of Object.entries(researchCommentListeners)) {
     if (!activeResearchIds.has(id)) { unsubscribe(); delete researchCommentListeners[id]; }

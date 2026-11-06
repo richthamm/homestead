@@ -1188,49 +1188,110 @@ function structureResearch(p,key){
 // Original records are retained for backward compatibility and provenance.
 // Prevent repeated imports and older aliased fields from showing duplicate facts.
 // This is a display-only consolidation: underlying research and manual notes remain saved.
+// Normalize repeated research wording without rewriting the stored source records.
+// Preserve the first (usually user-authored) sentence and add only genuinely new facts.
 function noteFingerprint(text){
- return String(text||'').toLowerCase().replace(/\b(\d+)\s*x\s*(\d+)\b/g,'$1x$2')
-  .replace(/^[a-z][a-z\s]{0,22}:\s*/i,'').replace(/[^a-z0-9]+/g,' ').trim();
+ return String(text||'').toLowerCase()
+  .replace(/\b(?:two|2)\s*[- ]?roll[- ]?up[- ]?doors?\b/g,'2 rollup doors')
+  .replace(/\b(?:two|2)\s*[- ]?doors?\b/g,'2 doors')
+  .replace(/\b(?:back|rear)\b/g,'rear')
+  .replace(/\b(?:garage\/workshop|workshop\/garage)\b/g,'garage workshop')
+  .replace(/\b(?:fully|completely)\s+fenced\b/g,'fenced')
+  .replace(/\b(?:not verified|unconfirmed|not confirmed)\b/g,'unconfirmed')
+  .replace(/\b(?:outer|complete outer|perimeter)\s+(?:pasture\s+)?(?:boundary|fencing)\b/g,'outer fence')
+  .replace(/\b(?:covered back|covered rear)\s+porch\b/g,'covered rear porch')
+  .replace(/\b(\d+)\s*x\s*(\d+)\b/g,'$1x$2')
+  .replace(/^[a-z][a-z\s]{0,22}:\s*/i,'')
+  .replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function noteWords(text){
+ const stop=new Set(['a','an','the','is','are','in','of','to','with','and','or','for','at','on','by','from','as','its','it','has','have','area','property','described','listed','reported']);
+ return new Set(noteFingerprint(text).split(' ').filter(x=>x.length>2&&!stop.has(x)));
 }
 function noteEquivalent(a,b){
  const x=noteFingerprint(a),y=noteFingerprint(b);
  if(!x||!y)return false;
  if(x===y)return true;
- if(Math.min(x.length,y.length)>24&&(x.includes(y)||y.includes(x)))return true;
- // Minor word order and punctuation changes count as duplicates; substantive new facts do not.
- const tx=new Set(x.split(' ').filter(w=>w.length>2)),ty=new Set(y.split(' ').filter(w=>w.length>2));
- if(tx.size<5||ty.size<5)return false;
- const overlap=[...tx].filter(w=>ty.has(w)).length;
- return overlap/Math.max(tx.size,ty.size)>=0.92;
+ if(Math.min(x.length,y.length)>22&&(x.includes(y)||y.includes(x)))return true;
+ const ax=noteWords(a),by=noteWords(b);
+ if(ax.size<3||by.size<3)return false;
+ const shared=[...ax].filter(x=>by.has(x)).length;
+ const smaller=Math.min(ax.size,by.size), larger=Math.max(ax.size,by.size);
+ // High confidence only. Do not discard a distinct fact just because it is about the same topic.
+ return shared/smaller>=0.78 && shared/larger>=0.55;
 }
-function uniqueNoteLines(text){
+function distinctNoteClauses(text,existing){
+ const unique=[];
+ for(const raw of String(text||'').split(/[;\n]+/).map(x=>x.trim()).filter(Boolean)){
+  const isRepeated=existing.some(old=>noteEquivalent(old,raw))||unique.some(old=>noteEquivalent(old,raw));
+  if(!isRepeated)unique.push(raw);
+ }
+ return unique;
+}
+function noteDuplicateForTopic(key,oldLine,newLine){
+ if(noteEquivalent(oldLine,newLine))return true;
+ const a=noteFingerprint(oldLine),b=noteFingerprint(newLine),wa=noteWords(oldLine),wb=noteWords(newLine);
+ const shared=[...wa].filter(x=>wb.has(x)).length;
+ if(!wa.size||!wb.size)return false;
+ const similarity=shared/Math.min(wa.size,wb.size);
+ if(key==='land' && /\b\d+\s*acres?\b/i.test(oldLine) && /\b\d+\s*acres?\b/i.test(newLine)){
+  const num=v=>String(v).match(/\b(\d+(?:\.\d+)?)\s*acres?\b/i)?.[1];
+  if(num(oldLine)===num(newLine)&& similarity>=.45)return true;
+ }
+ if((key==='garage'||key==='workshop')&& /\b\d+\s*x\s*\d+\b/i.test(oldLine)&&/\b\d+\s*x\s*\d+\b/i.test(newLine)){
+  const dim=v=>noteFingerprint(v).match(/\b\d+x\d+\b/)?.[0];
+  if(dim(oldLine)===dim(newLine)&&similarity>=.4)return true;
+ }
+ if(key==='fencing'&&a.includes('fenced')&&b.includes('fenced')&&similarity>=.38)return true;
+ if(key==='outdoor'&&a.includes('porch')&&b.includes('porch')&&a.includes('sunset')&&b.includes('sunset'))return true;
+ return false;
+}
+function uniqueNoteLines(text,key=''){
  const result=[];
- for(const line of String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean)){
-  if(!result.some(old=>noteEquivalent(old,line)))result.push(line);
+ for(const raw of String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean)){
+  const parts=raw.split(';').map(x=>x.trim()).filter(Boolean);
+  const alreadyJoined=result.join(' ');
+  const nearDuplicate=result.some(old=>noteDuplicateForTopic(key,old,raw));
+  if(nearDuplicate){
+   // Example: "8 acres, creek; flood status not verified": retain only the new flood warning.
+   for(const extra of parts.slice(1)){
+    if(!result.some(old=>noteDuplicateForTopic(key,old,extra)) && !noteFingerprint(result.join(' ')).includes(noteFingerprint(extra)))result.push(extra.replace(/^./,x=>x.toUpperCase()).replace(/[.\s]+$/,'')+'.');
+   }
+   // Keep an added roll-up specification even when the rest of the garage line repeats.
+   if((key==='garage'||key==='workshop')&&/roll[- ]?up/i.test(raw)&& !/roll[- ]?up/i.test(alreadyJoined))result.push('Roll-up doors reported.');
+   continue;
+  }
+  if(!result.some(old=>noteEquivalent(old,raw)))result.push(raw);
  }
  return result;
 }
-function mergeDistinctNotes(original,addition){
- const lines=uniqueNoteLines(original);
- for(const line of uniqueNoteLines(addition)){
-  if(!lines.some(old=>noteEquivalent(old,line)))lines.push(line);
+function mergeDistinctNotes(original,addition,key=''){
+ const lines=uniqueNoteLines(original,key);
+ for(const line of uniqueNoteLines(addition,key)){
+  if(lines.some(old=>noteDuplicateForTopic(key,old,line))) {
+   // Scan semicolon-delimited facts separately so new caveats are never silently lost.
+   const extra=line.split(';').slice(1);
+   for(const part of extra)if(!lines.some(old=>noteDuplicateForTopic(key,old,part)))lines.push(part.trim());
+   if((key==='garage'||key==='workshop')&&/roll[- ]?up/i.test(line)&&!lines.some(old=>/roll[- ]?up/i.test(old)))lines.push('Roll-up doors reported.');
+   continue;
+  }
+  lines.push(line);
  }
  return lines.join('\n');
 }
 function structureNotes(p,key){
  const data=p.details?.structures||{};
+ const knownKeys=new Set(Object.values(structureResearchKeys).flat().concat(Object.keys(structureResearchKeys)));
  const aliases=key==='additional'
-  ?Object.keys(data).filter(k=>!new Set(Object.values(structureResearchKeys).flat().concat(Object.keys(structureResearchKeys))).has(k))
+  ?Object.keys(data).filter(k=>!knownKeys.has(k))
   :structureResearchKeys[key]||[key];
- let lines=uniqueNoteLines(researchText(data[key]));
+ let lines=uniqueNoteLines(researchText(data[key]),key);
  for(const alias of aliases){
   if(alias===key)continue;
   const val=researchText(data[alias]);
   if(!val)continue;
-  for(const line of uniqueNoteLines(val)){
-   if(lines.some(old=>noteEquivalent(old,line)))continue;
-   lines.push(alias.replace(/_/g,' ').replace(/^./,c=>c.toUpperCase())+': '+line);
-  }
+  const merged=mergeDistinctNotes(lines.join('\n'),val,key);
+  lines=uniqueNoteLines(merged,key);
  }
  return lines.join('\n');
 }
@@ -1364,7 +1425,7 @@ function saveDetailField(propertyId,group,key,value) {
   const p=shared.find(x=>x.id===propertyId); if(!p)return;
   p.details ??= {};
   p.details[group] ??= {};
-  p.details[group][key]=value;
+  p.details[group][key]=group==='structures'?uniqueNoteLines(value,key).join('\n'):value;
   queue('shared');
 }
 const pilotResearch={"p8":{"structures":{"access":"Listing reports deeded driveway with road access; deed/easement documentation not independently verified.","garage":"Two-car carport; no enclosed garage reported.","workshop":"Air-conditioned hobby/art workshop (installed 2012); two storage buildings.","fencing":"Property described as fully fenced; separate pet enclosure.","water":"Private well reported.","septic":"Septic system reported; confirm capacity for both homes.","land":"5.872 acres, partially wooded, some level terrain; usable area needs site visit.","outdoor":"Large deck and slab entertaining area; hot tub reported."},"income":{"existing":"Two manufactured residences: main double-wide (1,768 sq ft), second single-wide (1,248 sq ft).","history":"Prior rental use claimed in original research; no documentation verified.","monthly":"Not documented.","permits":"Unrestricted land claimed; confirm deed and county rules."},"overview":{"floorplan":"Large open floor plan (main home)."},"scoreEvidence":{"floorplan":{"points":5,"source":"Realtor.com listing describes large open floor plan."},"outdoor":{"points":4,"source":"Listing documents large deck and slab entertaining area; provisional interpretation."}}},"p14":{"structures":{"garage":"One-car garage plus one-car and two-car carports.","workshop":"Shop reported in current listing.","barn":"Barn and horse arena reported.","fencing":"Fully fenced and cross-fenced acreage.","water":"Two water wells reported.","rv":"RV space with water, sewer and electric hookups.","land":"6.18 acres, gentle rolling terrain; horse property.","garden":"Greenhouse and chicken coop reported.","outdoor":"Above-ground pool, large covered decks and patio."},"income":{"existing":"No existing guest house documented. RV space with hookups is reported.","history":"No established rental operation documented.","monthly":"Not documented.","permits":"Minimal restrictions claimed; STR/RV rental permissions require verification."},"overview":{"primaryBath":"Listing reports jetted tub and shower stall, also shower/bath combo; verify whether separate in primary bathroom."},"scoreEvidence":{"garage":{"points":4,"source":"Movoto MLS listing specifies one-car garage; existing 1-car garage preference = 4."},"rv":{"points":5,"source":"Listing explicitly documents RV space with water, sewer and electric hookups; provisional score."},"garden":{"points":4,"source":"Listing documents greenhouse and chicken coop; provisional score."}}},"p36":{"structures":{"garage":"No garage reported. RV access/parking listed; hookups not confirmed.","fencing":"Gate and partial fencing.","water":"650-foot private well in winterized shed (listing claim).","septic":"Existing septic reportedly designed for 3,000 sq ft house plus existing cabin; verify permit and capacity.","power":"Electricity on site; underground lines to cabin and well shed; cable/telephone lines underground.","rv":"RV access/parking listed. No water/sewer/electric RV hookups verified.","land":"8.85 acres, partially wooded; terrain and usable acreage require site review.","outdoor":"Covered patio reported."},"income":{"existing":"Small existing residence/cabin; no separate established guest rental documented.","history":"No established rental history documented.","monthly":"Not documented.","permits":"Mandatory Brushy Creek Ranch HOA; obtain covenants before planning rentals or additional cabins."},"overview":{"summary":"IMPORTANT: Current listings classify residence as manufactured/mobile; original grading evidence calls it site-built. Verify and correct grading after review. Listing sources disagree on cabin area (525 vs 640 sq ft)."}}};
@@ -1785,7 +1846,7 @@ function mergeResearch(existing,incoming,now){
     const existingText=p.details[group][key].trim(),fresh=value.trim();
     // Preserve distinct facts and manual wording, without accumulating repeated
     // research lines on each import. The rendered view also deduplicates old records.
-    const mergedText=mergeDistinctNotes(existingText,fresh);
+    const mergedText=mergeDistinctNotes(existingText,fresh,key);
     if(mergedText===existingText)continue;
     p.details[group][key]=mergedText;
     changes.push(group+'.'+key);continue;

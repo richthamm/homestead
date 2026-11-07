@@ -717,7 +717,7 @@ function decodeSharedFromFirestore(properties){
   return p;
  });
 }
-function queue(kind){if(!ready)return; if(kind==='shared')dirtyShared=true;else dirtyMine=true;status('Saving changes…');clearTimeout(saveTimer);saveTimer=setTimeout(flush,650)}
+function queue(kind){if(!ready)return; if(kind==='shared')dirtyShared=true;else dirtyMine=true;status('Saving changes…');clearTimeout(saveTimer);saveTimer=setTimeout(flush,1500)}
 async function flush(){if(saveBusy||!ready)return;saveBusy=true;let writeShared=dirtyShared,writeMine=dirtyMine;dirtyShared=false;dirtyMine=false;try{
  if(writeShared){let snapshot=encodeSharedForFirestore(shared);await setDoc(sharedRef,{properties:snapshot,updatedAt:new Date().toISOString()});}
  if(writeMine){await setDoc(personalRef(me.uid),{notes:mine.notes||{},ranks:mine.ranks||{},reviewed:mine.reviewed||{},updatedAt:new Date().toISOString()});}
@@ -1265,7 +1265,22 @@ function tripSection(p){
   return '<div class="detail-note"><strong>'+esc(label)+'</strong> · '+(routeFinite(x.minutes)?Math.round(x.minutes)+' min':'Time not researched')+' · '+(routeFinite(x.miles)?x.miles+' mi':'Distance not researched')+' · <span class="trip-status '+(credibleRoute(x)?'verified':'unverified')+'">'+esc(status)+'</span>'+sourceLabel+' · <a href="'+esc(route)+'" target="_blank" rel="noopener noreferrer">Directions ↗</a></div>';
  }).join('');
 }
+// Preserve the active editor while cloud autosave and snapshot listeners run.
+// A full render replaces textarea nodes and would otherwise discard focus/caret.
+let hqRenderDeferredWhileEditing=false;
+function hqTextEditorActive(){
+ const el=document.activeElement;
+ return !!(el && el.isConnected && !el.readOnly && !el.disabled &&
+   (el.matches('textarea') || el.matches('input[type="text"],input[type="search"],input:not([type])') || el.isContentEditable) &&
+   (el.closest('#cards') || el.closest('#propertyDetails') || el.closest('#detailView') || el.closest('[data-rendered-property-id]')));
+}
+document.addEventListener('focusout',()=>{
+ if(!hqRenderDeferredWhileEditing)return;
+ setTimeout(()=>{if(!hqTextEditorActive() && hqRenderDeferredWhileEditing){hqRenderDeferredWhileEditing=false;render()}},0);
+});
 function render(){if(!ready)return;
+ if(hqTextEditorActive()){hqRenderDeferredWhileEditing=true;return;}
+
  const openCardEvidence=new Set(Array.from(document.querySelectorAll('#cards [data-card-evidence]')).filter(node=>node.getAttribute('aria-expanded')==='true').map(node=>node.dataset.cardEvidence));
  renderWarCouncil();if(openPropertyId)renderPropertyDetails();let q=$('search').value.toLowerCase().trim(),g=$('group').value,a=+$('acre').value,d=$('decisionfilter').value,f=$('rankfilter').value;
  let list=shared.filter(p=>{let dec=p.decision||'Active';if(!(d==='all'||(d==='tracking'?dec==='Active':dec===d)))return false;if(g!=='all'&&!(g==='Favorite'||g==='Serious inquiry'?hqClass(p)===g:g==='New discovery'?discoveryPending(p):(p.groups||[]).includes(g)))return false;if((p.acres||0)<a)return false;if(f==='mine-unranked'&&rankOf(mine,p.id)!==null)return false;if(f==='mine-ranked'&&rankOf(mine,p.id)===null)return false;if(f==='other-unranked'&&rankOf(other,p.id)!==null)return false;if(f==='other-ranked'&&rankOf(other,p.id)===null)return false;if(f==='both-ranked'&&combined(p.id)===null)return false;return[p.address,p.city,p.notes,p.risk,p.decisionReason,notesOf(mine,p.id),notesOf(other,p.id),...(p.features||[])].join(' ').toLowerCase().includes(q)});

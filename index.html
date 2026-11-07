@@ -717,12 +717,15 @@ function decodeSharedFromFirestore(properties){
   return p;
  });
 }
-function queue(kind){if(!ready)return; if(kind==='shared')dirtyShared=true;else dirtyMine=true;status('Saving changes…');clearTimeout(saveTimer);saveTimer=setTimeout(flush,1500)}
-async function flush(){if(saveBusy||!ready)return;saveBusy=true;let writeShared=dirtyShared,writeMine=dirtyMine;dirtyShared=false;dirtyMine=false;try{
+function hqEditingTextarea(){const el=document.activeElement;return !!(el&&el.isConnected&&el.matches('textarea:not([readonly]):not([disabled])'))}
+function scheduleHqSaveAfterEdit(){clearTimeout(saveTimer);if(ready&&(dirtyShared||dirtyMine))saveTimer=setTimeout(flush,1500)}
+function queue(kind){if(!ready)return;if(kind==='shared')dirtyShared=true;else dirtyMine=true;status(hqEditingTextarea()?'Editing · save after leaving field':'Saving changes…');clearTimeout(saveTimer);if(!hqEditingTextarea())scheduleHqSaveAfterEdit()}
+document.addEventListener('focusout',e=>{if(e.target.matches?.('textarea:not([readonly]):not([disabled])'))setTimeout(()=>{if(!hqEditingTextarea())scheduleHqSaveAfterEdit()},0)},true);
+async function flush(){if(saveBusy||!ready)return;if(hqEditingTextarea()){clearTimeout(saveTimer);return;}saveBusy=true;let writeShared=dirtyShared,writeMine=dirtyMine;dirtyShared=false;dirtyMine=false;try{
  if(writeShared){let snapshot=encodeSharedForFirestore(shared);await setDoc(sharedRef,{properties:snapshot,updatedAt:new Date().toISOString()});}
  if(writeMine){await setDoc(personalRef(me.uid),{notes:mine.notes||{},ranks:mine.ranks||{},reviewed:mine.reviewed||{},updatedAt:new Date().toISOString()});}
  status('✓ Cloud saved at '+new Date().toLocaleTimeString());
- }catch(e){if(writeShared)dirtyShared=true;if(writeMine)dirtyMine=true;status('⚠ Save failed: '+e.message,true)}finally{saveBusy=false;if((dirtyShared||dirtyMine)&&ready&&!$('backupstatus').classList.contains('needsbackup'))setTimeout(flush,250)}}
+ }catch(e){if(writeShared)dirtyShared=true;if(writeMine)dirtyMine=true;status('⚠ Save failed: '+e.message,true)}finally{saveBusy=false;if((dirtyShared||dirtyMine)&&ready&&!$('backupstatus').classList.contains('needsbackup'))scheduleHqSaveAfterEdit();else if(hqRenderDeferredWhileEditing&&!hqTextEditorActive()){hqRenderDeferredWhileEditing=false;render()}}}
 window.addEventListener('beforeunload',e=>{if(dirtyShared||dirtyMine||saveBusy||ratingsDirty||ratingsBusy){e.preventDefault();e.returnValue=''}});
 async function requestAccess(user){try{await setDoc(requestRef(user.uid),{uid:user.uid,email:user.email||'',name:user.displayName||'',requestedAt:serverTimestamp()});gate('Access requested. Rich can approve your Google account. Please return after approval.','<button class="btn" id="pendingLogout">Sign out</button>');$('pendingLogout').onclick=()=>signOut(auth)}catch(e){gate('Request failed: '+e.message)}}
 // The invitation is created by the owner. The verified-email claim is enforced in Firestore rules.
@@ -760,7 +763,7 @@ async function migrate(){if(!confirm('Migrate from the OLD dashboard into Versio
  alert('Migration finished: '+clean.length+' properties, '+Object.keys(notes).length+' existing notes preserved. Both ranks are blank.');
  }catch(e){alert('Migration stopped: '+e.message+' Check Version 2 before retrying.')}}
 function start(){let mref=memberRef(me.uid);listen(mref,snap=>{if(!snap.exists()||snap.data().active!==true){cleanup();gate('Your account is not approved. Request access from Rich.','<button class="btn primary" id="request">Request approval</button> <button class="btn" id="pendingLogout">Sign out</button>');$('request').onclick=()=>requestAccess(auth.currentUser);$('pendingLogout').onclick=()=>signOut(auth);return}member=snap.data();});
- listen(sharedRef,snap=>{if(!dirtyShared){shared=snap.exists()?decodeSharedFromFirestore(snap.data().properties||[]):[];render();initializeOwnerRatings()}if(me.uid===OWNER&&!snap.exists()){status('No Version 2 properties yet. Use Owner tools → One-time migration.',true)}else if(snap.metadata?.fromCache){status('⚠ Viewing locally cached property data; cloud connection not yet confirmed.',true)}else{status('✓ Cloud connected · '+shared.length+' properties loaded')};});
+ listen(sharedRef,snap=>{if(!dirtyShared&&!saveBusy&&!hqTextEditorActive()){shared=snap.exists()?decodeSharedFromFirestore(snap.data().properties||[]):[];render();initializeOwnerRatings()}if(me.uid===OWNER&&!snap.exists()){status('No Version 2 properties yet. Use Owner tools → One-time migration.',true)}else if(snap.metadata?.fromCache){status('⚠ Viewing locally cached property data; cloud connection not yet confirmed.',true)}else{status('✓ Cloud connected · '+shared.length+' properties loaded')};});
  listen(personalRef(me.uid),snap=>{if(!dirtyMine){mine=snap.exists()?snap.data():{notes:{},ranks:{},reviewed:{}};render()}});
  ratingsUnsub=onSnapshot(ratingsRef(me.uid),snap=>{
    if(!ratingsDirty&&!ratingsBusy){myRatings=snap.exists()?snap.data():{ratings:{}};myRatings.loaded=true;ratingsReady=true;render();initializeOwnerRatings()}
@@ -1276,7 +1279,7 @@ function hqTextEditorActive(){
 }
 document.addEventListener('focusout',()=>{
  if(!hqRenderDeferredWhileEditing)return;
- setTimeout(()=>{if(!hqTextEditorActive() && hqRenderDeferredWhileEditing){hqRenderDeferredWhileEditing=false;render()}},0);
+ setTimeout(()=>{if(!hqTextEditorActive() && hqRenderDeferredWhileEditing && !dirtyShared && !saveBusy){hqRenderDeferredWhileEditing=false;render()}},0);
 });
 function render(){if(!ready)return;
  if(hqTextEditorActive()){hqRenderDeferredWhileEditing=true;return;}

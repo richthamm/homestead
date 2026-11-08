@@ -559,6 +559,19 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
 #cards>.card>.hq-class-badge{position:absolute;top:8px;right:9px;z-index:9;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;font-size:24px;font-weight:800;line-height:1;pointer-events:none;text-shadow:0 1px 3px #000}
 #cards>.card>.hq-class-badge.favorite{color:#ff9ab8;background:#462538e8}
 #cards>.card>.hq-class-badge.serious{color:#ffe092;background:#514124e8}
+
+/* v3.3: compact detail alerts, full evidence only in floating dialog */
+.hq-detail-alert-trigger{display:inline-flex;align-items:center;width:max-content;margin:6px 0 2px;padding:5px 10px;font-size:12px;font-weight:800;line-height:1.3}
+.hq-detail-alert-trigger.caution{border-color:#dfb64d;background:#4c3e21;color:#ffe5a2}
+.hq-detail-alert-trigger.critical{border-color:#ef746e;background:#5d2927;color:#ffe4e2}
+.hq-detail-alert-trigger.resolved{border-color:#6f9e80;color:#d0edda}
+.hq-detail-alert-overlay{position:fixed;inset:0;z-index:12000;background:#000b;display:flex;align-items:center;justify-content:center;padding:18px}
+.hq-detail-alert-dialog{width:min(620px,100%);max-height:calc(100dvh - 36px);overflow:hidden;display:flex;flex-direction:column;background:#1b2924;color:var(--text);border:1px solid #718a77;border-radius:13px;box-shadow:0 22px 75px #000c}
+.hq-detail-alert-dialog.critical{border-color:#ef746e}.hq-detail-alert-dialog.caution{border-color:#dfb64d}
+.hq-detail-alert-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 17px;border-bottom:1px solid #45594a;flex-shrink:0}
+.hq-detail-alert-head h3{margin:0;font-size:19px}.hq-detail-alert-body{padding:15px 18px 19px;overflow-y:auto;overscroll-behavior:contain}
+.hq-detail-alert-reason{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;margin:0 0 14px}
+.hq-detail-alert-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
 </style></head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="hq-header-content"><div class="hq-header-title"><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></div><div class="hq-header-data" role="group" aria-label="Data tools"><button class="btn" id="importResearch" type="button">📥 Import Val's Research</button><button class="btn" id="refreshResearch" type="button">🔎 Refresh All Research</button><button class="btn primary" id="export" type="button">Download JSON Backup</button></div></div></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <button class="btn hq-refresh-top" id="refreshDashboard" type="button">🔄 Refresh Dashboard</button>
      <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.2     </span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
 <details id="hqDisclaimer" class="hq-disclaimer">
@@ -1131,6 +1144,37 @@ function resolveResearchAlert(id){
 }
 function reopenResearchAlert(id){const p=shared.find(x=>x.id===id);if(!p?.researchAlert?.resolved)return;
  if(!confirm('Reopen the resolved conflict?'))return;p.researchAlert={...p.researchAlert,resolved:false};delete p.researchAlert.resolvedAt;queue('shared');render();}
+
+// Details-page research conflicts appear in a floating, independently scrollable dialog.
+function closeDetailResearchAlert(){
+ const overlay=document.getElementById('hqDetailAlertOverlay');
+ if(overlay)overlay.remove();
+ document.body.classList.remove('hq-detail-alert-open');
+}
+function openDetailResearchAlert(id){
+ closeDetailResearchAlert();
+ const p=shared.find(x=>x.id===id);if(!p)return;
+ const active=alertInfo(p),resolved=!active&&p.researchAlert?.resolved;
+ if(!active&&!resolved)return;
+ const record=active||p.researchAlert;
+ const critical=active?.level==='critical';
+ const overlay=document.createElement('div');overlay.id='hqDetailAlertOverlay';overlay.className='hq-detail-alert-overlay';
+ overlay.innerHTML=`<section class="hq-detail-alert-dialog ${critical?'critical':active?'caution':'resolved'}" role="dialog" aria-modal="true" aria-labelledby="hqDetailAlertTitle" tabindex="-1">
+ <div class="hq-detail-alert-head"><h3 id="hqDetailAlertTitle">${critical?'Critical Alert':active?'Research Alert':'Resolved Research Alert'}</h3><button type="button" class="btn" id="hqDetailAlertClose" aria-label="Close research alert">✕ Close</button></div>
+ <div class="hq-detail-alert-body"><p class="hq-detail-alert-reason">${esc(record.reason||'Research discrepancy requires review.')}</p>
+ <p class="small">Source: ${esc(record.source||'Research import')}</p>
+ ${active?'<p class="small">This alert concerns conflicting research information, not routine unverified listing claims.</p>':`<p class="small">Resolution: ${esc(record.resolution||'Not recorded')}</p><p class="small">Resolved: ${esc(record.resolvedAt||'Not recorded')}</p>`}
+ <div class="hq-detail-alert-actions"><button type="button" class="btn ${active?'primary':''}" id="hqDetailAlertAction">${active?'✓ Mark resolved with evidence':'Reopen alert'}</button></div></div></section>`;
+ document.body.appendChild(overlay);document.body.classList.add('hq-detail-alert-open');
+ const dialog=overlay.querySelector('.hq-detail-alert-dialog');
+ const close=()=>{document.removeEventListener('keydown',keyHandler);closeDetailResearchAlert()};
+ const keyHandler=e=>{if(e.key==='Escape'){e.preventDefault();close()}};
+ document.addEventListener('keydown',keyHandler);
+ overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
+ overlay.querySelector('#hqDetailAlertClose').onclick=close;
+ overlay.querySelector('#hqDetailAlertAction').onclick=()=>{close();if(active)resolveResearchAlert(id);else reopenResearchAlert(id)};
+ dialog.focus();
+}
 function setNotes(id,value){mine.notes??={};mine.notes[id]=value;queue('mine')}
 function setDecision(id,value){let p=shared.find(p=>p.id===id);if(!p)return;if(!confirm(value==='Active'?'Restore this property to BOTH active lists?':'Set this property to '+value+' for BOTH people?'))return;p.decision=value;p.decisionDate=new Date().toISOString().slice(0,10);if(value==='Rejected'){p.decisionReason=prompt('Optional shared reason for rejecting this property:','')||''}if(value==='Active')p.decisionReason='';queue('shared');render()}
 
@@ -2235,10 +2279,10 @@ function renderPropertyDetails() {
   root.innerHTML=`
     <div class="hq-detail-fixed"><div class="hq-detail-info">
     <div class="details-top"><button class="btn" id="detailBack" type="button">← Back to ${detailReturnView==='council'?'War Council':'Properties'}</button>${p.decision&&p.decision!=='Active'?`<span class="tag">${esc(p.decision)}</span>`:''}<div class="hq-detail-rank-summary" aria-label="Property rankings"><div class="rankbox">Rich<strong>${rich===null?'—':'#'+rich}</strong></div><div class="rankbox">Tiffany<strong>${tiffany===null?'—':'#'+tiffany}</strong></div><div class="rankbox">Combined<strong>${combined(p.id)===null?'—':'#'+combined(p.id).toFixed(1)}</strong></div></div><span class="tag hq-detail-tier">${esc(councilTier(p.id))}</span>${councilTier(p.id)==='Unranked'?`<span class="hq-rank-wait-note">Tier updates once both Rich and Tiffany have ranked this property.</span>`:''}</div>
-    <h2 style="font-size:clamp(25px,3vw,37px);margin:0">${esc(p.address)}</h2>${alertBadge(p)}
+    <h2 style="font-size:clamp(25px,3vw,37px);margin:0">${esc(p.address)}</h2>${alertInfo(p)?`<button class="btn hq-detail-alert-trigger ${alertInfo(p).level==='critical'?'critical':'caution'}" type="button" id="detailAlertOpen">${alertInfo(p).level==='critical'?'Critical Alert':'Research Alert'}</button>`:p.researchAlert?.resolved?`<button class="btn hq-detail-alert-trigger resolved" type="button" id="detailAlertOpen">✓ Resolved Research Alert</button>`:''}
     <div class="city">${esc(p.city)}, Texas · ${esc(listingStatus(p))}</div>
     <p class="small">Research last checked: ${esc(p.researchLastChecked?new Date(p.researchLastChecked).toLocaleString():'Not recorded')}</p><div class="card-meta">${listingStatusLabel(p)}<span class="mini-chip">${esc(ageClocks(p))}</span><span class="mini-chip">${hoaSummary(p)}</span>${restrictionsSummary(p)}</div><div class="detail-meta"><strong>${money(p.price)}</strong><span>🌲 ${fmt(p.acres)} acres</span><span>${fmt(p.beds)} beds / ${fmt(p.baths)} baths</span><span>${fmt(p.sqft)} sq ft</span></div>
-    ${alertInfo(p)?`<div class="alert-panel ${esc(alertInfo(p).level)}"><strong>⚠ Research alert — ${alertInfo(p).level==='critical'?'Major conflict':'Minor conflict'}</strong><p>${esc(alertInfo(p).reason)}</p><p class="small">Source: ${esc(alertInfo(p).source||'Research import')}. This alert concerns conflicting information, not routine unverified listing claims.</p><button class="btn" type="button" id="resolveAlert">✓ Mark resolved with evidence</button></div>`:p.researchAlert?.resolved?`<div class="alert-panel"><strong>✓ Research alert resolved</strong><p>${esc(p.researchAlert.reason||'')}</p><p class="small">${esc(p.researchAlert.resolution||'')} · ${esc(p.researchAlert.resolvedAt||'')}</p><button class="btn" id="reopenAlert" type="button">Reopen alert</button></div>`:''}
+
     ${pilotResearch[p.id]?`<div class="notice"><strong>Research pilot available:</strong> Reviewed listing information for this Serious Inquiry. <button class="btn primary" id="applyPilotResearch" type="button">📋 Populate Researched Details</button><div class="small">Adds only missing fields; never overwrites your existing entries or manual scores. Review before relying on any listing claims.</div></div>`:''}
     <div class="detail-actions"><a class="btn primary" href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer">Open Original Listing ↗</a><button class="btn" type="button" id="detailResearch">${p.deepResearch?'🔎 Remove Research Flag':'🔎 Mark for Deep Research'}</button></div>
     </div><div class="hq-detail-right"><div class="hq-detail-notes"><div class="hq-note-rich"><label>R · Rich's notes ${me.uid===OWNER?'(editable)':'(read only)'}</label><textarea ${me.uid===OWNER?'id="detailMyNotes"':'readonly'} placeholder="Rich's observations…">${esc(notesOf(me.uid===OWNER?mine:other,p.id))}</textarea></div><div class="hq-note-tiffany"><label>T · Tiffany's notes ${me.uid!==OWNER?'(editable)':'(read only)'}</label><textarea ${me.uid!==OWNER?'id="detailMyNotes"':'readonly'} placeholder="Tiffany's observations…">${esc(notesOf(me.uid===OWNER?other:mine,p.id))}</textarea></div></div><div class="hq-detail-progress">${dualBars(allTopicStats(p),p)}</div></div></div></div><div class="hq-detail-scroll" id="detailAssessmentScroll">
@@ -2293,7 +2337,7 @@ function renderPropertyDetails() {
   if($('hqRoutesCompute'))$('hqRoutesCompute').onclick=async()=>{const btn=$('hqRoutesCompute'),status=$('hqRoutesStatus');btn.disabled=true;try{await computeTravelRoutes(p.id,status)}catch(e){const dest=$('hqRoutesStatus');if(dest)dest.textContent='Routing failed: '+String(e.message||e)}finally{const dest=$('hqRoutesCompute');if(dest)dest.disabled=false}};
 
   if($('detailListedOn'))$('detailListedOn').onchange=e=>{p.listedOn=e.target.value;queue('shared');render()};
-  if($('resolveAlert'))$('resolveAlert').onclick=()=>resolveResearchAlert(p.id);if($('reopenAlert'))$('reopenAlert').onclick=()=>reopenResearchAlert(p.id);$('detailMyRank').onchange=el=>setRank(p.id,el.target.value);
+  if($('detailAlertOpen'))$('detailAlertOpen').onclick=()=>openDetailResearchAlert(p.id);$('detailMyRank').onchange=el=>setRank(p.id,el.target.value);
   if($('detailReviewed'))$('detailReviewed').onclick=()=>setReviewed(p.id);$('detailClearRank').onclick=()=>setRank(p.id,'');$('detailRankUp').onclick=()=>nudgeRank(p.id,'up');$('detailRankDown').onclick=()=>nudgeRank(p.id,'down');
   $('detailResearch').onclick=()=>{p.deepResearch=!p.deepResearch;queue('shared');render();};
   if(p.deepResearch){

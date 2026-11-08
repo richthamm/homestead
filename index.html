@@ -1071,7 +1071,7 @@ function start(){let mref=memberRef(me.uid);listen(mref,snap=>{if(!snap.exists()
    if(!ratingsDirty&&!ratingsBusy){myRatings=snap.exists()?snap.data():{ratings:{}};myRatings.loaded=true;ratingsReady=true;render();initializeOwnerRatings()}
  },e=>status('⚠ Personal ratings could not load: '+e.message,true));
  listen(query(collection(db,'members')),snap=>{let members=snap.docs.filter(d=>d.data().active===true);let partner=members.find(d=>d.id!==me.uid);let next=partner?.id||null;if(next!==partnerUid){partnerUid=next;if(window.otherUnsub)window.otherUnsub();if(partnerRatingsUnsub)partnerRatingsUnsub();partnerRatings={ratings:{}};other={};if(partnerUid){window.otherUnsub=onSnapshot(personalRef(partnerUid),s=>{other=s.exists()?s.data():{notes:{},ranks:{},reviewed:{}};render()});partnerRatingsUnsub=onSnapshot(ratingsRef(partnerUid),snap=>{partnerRatings=snap.exists()?snap.data():{ratings:{}};partnerRatings.loaded=true;render()},e=>status('Partner ratings sync error: '+e.message,true))}render()}});
- ready=true;open();$('identity').textContent=(me.uid===OWNER?'Rich (owner)':'Tiffany (member)')+' · '+(me.email||'');if(me.uid===OWNER)showAdmin();render();}
+ ready=true;open();$('identity').textContent=(me.uid===OWNER?'Rich (owner)':'Tiffany (member)')+' · '+(me.email||'');$('sort').value=me.uid===OWNER?'rich':'tiffany';$('sortDirection').value='asc';if(me.uid===OWNER)showAdmin();render();}
 onAuthStateChanged(auth,async user=>{cleanup();$('admin').classList.add('hidden');if(window.otherUnsub){window.otherUnsub();window.otherUnsub=null}if(!user){gate('Sign in with Google to access your private homestead dashboard.','<button class="btn primary" id="googleLogin">Sign in with Google</button>');$('googleLogin').onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){gate('Sign-in failed: '+e.message,'<button class="btn primary" id="retry">Try again</button>');$('retry').onclick=()=>location.reload()}};return}
  me=user;gate('Checking your access…');try{let m=await getDoc(memberRef(user.uid));if(m.exists()&&m.data().active===true){start()}else{let claimed=false;try{claimed=await tryClaimInvitation(user)}catch(e){console.warn('Invitation claim failed:',e)}if(claimed){start();return}gate('This Google account is not yet approved. If you were invited, confirm you signed in with the invited Google email; otherwise request access from Rich.','<button class="btn primary" id="request">Request approval</button> <button class="btn" id="pendingLogout">Sign out</button>');$('request').onclick=()=>requestAccess(user);$('pendingLogout').onclick=()=>signOut(auth)}}catch(e){gate('Cannot verify access: '+e.message,'<button class="btn" id="pendingLogout">Sign out</button>');$('pendingLogout').onclick=()=>signOut(auth)}});
 $('logout').onclick=()=>signOut(auth);
@@ -1107,9 +1107,18 @@ function setRank(id,value){
 }
 function nudgeRank(id,direction){
  if(!activeRankingIds().includes(id))return;
- const ids=orderedRankedIds(),at=ids.indexOf(id);
- if(at<0){if(direction==='up')ids.unshift(id);else ids.push(id)}
- else{const target=at+(direction==='up'?-1:1);if(target<0||target>=ids.length)return;[ids[at],ids[target]]=[ids[target],ids[at]]}
+ const ids=orderedRankedIds();
+ const at=ids.indexOf(id);
+ if(at<0){
+   // Unranked: up enters at the best rank; down enters after the last ranked property.
+   if(direction==='up')ids.unshift(id);else ids.push(id);
+ }else{
+   // One step toward the next ranked property, not a numerical gap in old data.
+   const next=at+(direction==='up'?-1:1);
+   if(next<0||next>=ids.length){writeOrderedRanks(ids);return;}
+   ids.splice(at,1);
+   ids.splice(next,0,id);
+ }
  writeOrderedRanks(ids);
 }
 // Initial findings come from the 2026-11-04 research audit; they are NOT independent fact checks.

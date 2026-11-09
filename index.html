@@ -572,6 +572,10 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
 .hq-detail-alert-head h3{margin:0;font-size:19px}.hq-detail-alert-body{padding:15px 18px 19px;overflow-y:auto;overscroll-behavior:contain}
 .hq-detail-alert-reason{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;margin:0 0 14px}
 .hq-detail-alert-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
+
+/* Details collection control: compact and always accessible in the fixed header. */
+.hq-detail-class-picker{display:inline-flex;align-items:center;gap:8px;color:#d9e8d9;font-size:12px;font-weight:750}
+.hq-detail-class-picker select{background:#263630;color:#f0f5ed;border:1px solid #54715f;border-radius:7px;padding:8px;max-width:165px}
 </style></head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="hq-header-content"><div class="hq-header-title"><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></div><div class="hq-header-data" role="group" aria-label="Data tools"><button class="btn" id="importResearch" type="button">📥 Import Val's Research</button><button class="btn" id="refreshResearch" type="button">🔎 Refresh All Research</button><button class="btn primary" id="export" type="button">Download JSON Backup</button></div></div></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <button class="btn hq-refresh-top" id="refreshDashboard" type="button">🔄 Refresh Dashboard</button>
      <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.2     </span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
 <details id="hqDisclaimer" class="hq-disclaimer">
@@ -1083,6 +1087,13 @@ $('refreshDashboard').onclick=()=>{
   // Reload from the server, including fresh Firebase listeners and the current page version.
   location.reload();
 };
+// Allow time to classify and rank a card before the sorted list moves.
+let hqCardReorderTimer=null;
+function renderAfterCardInteraction(){
+ if(openPropertyId){render();return}
+ clearTimeout(hqCardReorderTimer);
+ hqCardReorderTimer=setTimeout(()=>{hqCardReorderTimer=null;render()},3500);
+}
 // Keep active personal rankings contiguous; move/clear shifts all neighboring ranks.
 function activeRankingIds(){return shared.filter(p=>(p.decision||'Active')==='Active').map(p=>p.id)}
 function orderedRankedIds(){
@@ -1094,7 +1105,7 @@ function writeOrderedRanks(ids){
  mine.ranks??={};const active=new Set(activeRankingIds());
  for(const id of active)delete mine.ranks[id];
  ids.forEach((id,i)=>mine.ranks[id]=i+1);
- queue('mine');render();
+ queue('mine');renderAfterCardInteraction();
 }
 function setRank(id,value){
  const active=activeRankingIds(),max=active.length;
@@ -1126,7 +1137,7 @@ function nudgeRank(id,direction){
    if(target<1||target>total)return;
    mine.ranks??={};
    mine.ranks[id]=target;
-   queue('mine');render();
+   queue('mine');renderAfterCardInteraction();
    return;
  }else{
    // One step toward the next ranked property, not a numerical gap in old data.
@@ -1344,7 +1355,7 @@ async function openParcelExplorer(id){
   fit();setTimeout(()=>map.invalidateSize(),100);
  }catch(err){const node=document.getElementById('parcelExplorerMap');if(node)node.innerHTML='<p style="padding:22px;color:#f3d0b8">Interactive map unavailable: '+esc(err.message||String(err))+'</p>'}
 }
-function setHQClassification(id,value){const p=shared.find(x=>x.id===id);if(!p||!['Watchlist','Favorite','Serious inquiry','Price Watch'].includes(value))return;p.hqClassification=value;queue('shared');render()}
+function setHQClassification(id,value){const p=shared.find(x=>x.id===id);if(!p||!['Watchlist','Favorite','Serious inquiry','Price Watch'].includes(value))return;p.hqClassification=value;queue('shared');renderAfterCardInteraction()}
 function safeNumber(value){return typeof value==='number'&&Number.isFinite(value)?value:null}
 function historyHtml(p){const history=Array.isArray(p.listingHistory)?p.listingHistory:[];return history.length?'<ul>'+history.slice().sort((a,b)=>String(b.observedAt||b.date||'').localeCompare(String(a.observedAt||a.date||''))).map(e=>'<li><strong>'+esc(e.date?e.date+' (event date)':e.observedAt?e.observedAt+' (first observed)':'Date unverified')+'</strong> — '+esc(e.type||'Update')+(e.note?' · '+esc(e.note):'')+(e.source?' · <a href="'+safeUrl(e.source)+'" target="_blank" rel="noopener">Source</a>':'')+'</li>').join('')+'</ul>':'<p class="small">No verified listing status history imported yet.</p>'}
 const ROUTE_DESTINATIONS=[
@@ -1624,7 +1635,7 @@ function render(){if(!ready)return;
 
  const openCardEvidence=new Set(Array.from(document.querySelectorAll('#cards [data-card-evidence]')).filter(node=>node.getAttribute('aria-expanded')==='true').map(node=>node.dataset.cardEvidence));
  renderWarCouncil();if(openPropertyId)renderPropertyDetails();let q=$('search').value.toLowerCase().trim(),g=$('group').value,d=$('decisionfilter').value,f=$('rankfilter').value;
- let list=shared.filter(p=>{let dec=p.decision||'Active';if(!(d==='all'||(d==='tracking'?dec==='Active':dec===d)))return false;if(g!=='all'&&!(['Watchlist','Favorite','Serious inquiry','Price Watch'].includes(g)?hqClass(p)===g:g==='New discovery'?discoveryPending(p):(p.groups||[]).includes(g)))return false;if(f==='mine-unranked'&&rankOf(mine,p.id)!==null)return false;if(f==='mine-ranked'&&rankOf(mine,p.id)===null)return false;if(f==='other-unranked'&&rankOf(other,p.id)!==null)return false;if(f==='other-ranked'&&rankOf(other,p.id)===null)return false;if(f==='both-ranked'&&combined(p.id)===null)return false;return[p.address,p.city,p.notes,p.risk,p.decisionReason,notesOf(mine,p.id),notesOf(other,p.id),...(p.features||[])].join(' ').toLowerCase().includes(q)});
+ let list=shared.filter(p=>{let dec=p.decision||'Active';if(!(d==='all'?dec!=='Rejected':(d==='tracking'?dec==='Active':dec===d)))return false;if(g!=='all'&&!(['Watchlist','Favorite','Serious inquiry','Price Watch'].includes(g)?hqClass(p)===g:g==='New discovery'?discoveryPending(p):(p.groups||[]).includes(g)))return false;if(f==='mine-unranked'&&rankOf(mine,p.id)!==null)return false;if(f==='mine-ranked'&&rankOf(mine,p.id)===null)return false;if(f==='other-unranked'&&rankOf(other,p.id)!==null)return false;if(f==='other-ranked'&&rankOf(other,p.id)===null)return false;if(f==='both-ranked'&&combined(p.id)===null)return false;return[p.address,p.city,p.notes,p.risk,p.decisionReason,notesOf(mine,p.id),notesOf(other,p.id),...(p.features||[])].join(' ').toLowerCase().includes(q)});
  let s=$('sort').value, direction=$('sortDirection').value;
  const sortValue=p=>{
    if(s==='price')return Number.isFinite(Number(p.price))&&p.price!==null&&p.price!==''?Number(p.price):null;
@@ -2309,7 +2320,7 @@ function renderPropertyDetails() {
     <p class="small">Research last checked: ${esc(p.researchLastChecked?new Date(p.researchLastChecked).toLocaleString():'Not recorded')}</p><div class="card-meta">${listingStatusLabel(p)}<span class="mini-chip">${esc(ageClocks(p))}</span><span class="mini-chip">${hoaSummary(p)}</span>${restrictionsSummary(p)}</div><div class="detail-meta"><strong>${money(p.price)}</strong><span>🌲 ${fmt(p.acres)} acres</span><span>${fmt(p.beds)} beds / ${fmt(p.baths)} baths</span><span>${fmt(p.sqft)} sq ft</span></div>
 
     ${pilotResearch[p.id]?`<div class="notice"><strong>Research pilot available:</strong> Reviewed listing information for this Serious Inquiry. <button class="btn primary" id="applyPilotResearch" type="button">📋 Populate Researched Details</button><div class="small">Adds only missing fields; never overwrites your existing entries or manual scores. Review before relying on any listing claims.</div></div>`:''}
-    <div class="detail-actions"><a class="btn primary" href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer">Open Original Listing ↗</a><button class="btn" type="button" id="detailResearch">${p.deepResearch?'🔎 Remove Research Flag':'🔎 Mark for Deep Research'}</button></div>
+    <div class="detail-actions"><label class="hq-detail-class-picker">Collection <select id="detailHQClassification" aria-label="Property collection"><option value="Watchlist" ${hqClass(p)==='Watchlist'?'selected':''}>Watchlist</option><option value="Favorite" ${hqClass(p)==='Favorite'?'selected':''}>Favorite</option><option value="Serious inquiry" ${hqClass(p)==='Serious inquiry'?'selected':''}>Serious Inquiry</option><option value="Price Watch" ${hqClass(p)==='Price Watch'?'selected':''}>Price Watch</option></select></label><a class="btn primary" href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer">Open Original Listing ↗</a><button class="btn" type="button" id="detailResearch">${p.deepResearch?'🔎 Remove Research Flag':'🔎 Mark for Deep Research'}</button></div>
     </div><div class="hq-detail-right"><div class="hq-detail-notes"><div class="hq-note-rich"><label>R · Rich's notes ${me.uid===OWNER?'(editable)':'(read only)'}</label><textarea ${me.uid===OWNER?'id="detailMyNotes"':'readonly'} placeholder="Rich's observations…">${esc(notesOf(me.uid===OWNER?mine:other,p.id))}</textarea></div><div class="hq-note-tiffany"><label>T · Tiffany's notes ${me.uid!==OWNER?'(editable)':'(read only)'}</label><textarea ${me.uid!==OWNER?'id="detailMyNotes"':'readonly'} placeholder="Tiffany's observations…">${esc(notesOf(me.uid===OWNER?other:mine,p.id))}</textarea></div></div><div class="hq-detail-progress">${dualBars(allTopicStats(p),p)}</div></div></div></div><div class="hq-detail-scroll" id="detailAssessmentScroll">
     <details class="details-section"><summary>⚔️ Master Property Assessment — 72 entries</summary><div class="details-body">
       <div class="detail-meta"><strong id="detailScoreTotal">—</strong><span id="detailScoreCount"></span></div>
@@ -2346,6 +2357,7 @@ function renderPropertyDetails() {
   }
   const back=()=>{openPropertyId=null;switchView(detailReturnView);restoreDetailReturnPosition()};
   $('detailBack').onclick=back;$('detailBackBottom').onclick=back;
+  $('detailHQClassification').onchange=e=>setHQClassification(p.id,e.target.value);
   if(pilotResearch[p.id])$('applyPilotResearch').onclick=()=>applyPilotResearch(p.id);
   root.querySelectorAll('[data-detail-group]').forEach(el=>el.onchange=()=>saveDetailField(p.id,el.dataset.detailGroup,el.dataset.detailKey,el.value.trim()));
   function updateScore(){const stats=wishlistStats(p);$('detailScoreTotal').textContent=stats.known?`${stats.points} / ${stats.total*5} possible master points`:'Not yet scored';$('detailScoreCount').textContent=`${stats.known} of ${stats.total} criteria assessed · ${stats.automatic} automatic`;}

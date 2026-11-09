@@ -1110,8 +1110,24 @@ function nudgeRank(id,direction){
  const ids=orderedRankedIds();
  const at=ids.indexOf(id);
  if(at<0){
-   // Unranked: up enters at the best rank; down enters after the last ranked property.
-   if(direction==='up')ids.unshift(id);else ids.push(id);
+   // Unranked properties enter the nearest vacant slot in the chosen direction.
+   // Up: first unoccupied positive rank. Down: highest unoccupied rank
+   // within the total number of active properties. Do not displace others.
+   const occupied=new Set(ids.map(k=>Number(mine.ranks?.[k])).filter(Number.isInteger));
+   const total=activeRankingIds().length;
+   let target;
+   if(direction==='up'){
+     target=1;
+     while(occupied.has(target)&&target<=total)target++;
+   }else{
+     target=total;
+     while(occupied.has(target)&&target>=1)target--;
+   }
+   if(target<1||target>total)return;
+   mine.ranks??={};
+   mine.ranks[id]=target;
+   queue('mine');render();
+   return;
  }else{
    // One step toward the next ranked property, not a numerical gap in old data.
    const next=at+(direction==='up'?-1:1);

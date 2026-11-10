@@ -577,7 +577,20 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
 /* Details collection control: compact and always accessible in the fixed header. */
 .hq-detail-class-picker{display:inline-flex;align-items:center;gap:8px;color:#d9e8d9;font-size:12px;font-weight:750}
 .hq-detail-class-picker select{background:#263630;color:#f0f5ed;border:1px solid #54715f;border-radius:7px;padding:8px;max-width:165px}
-</style><style id="criterion-flames-styles">
+<style id="collections-view-styles">/* Compact three-column collections overview */
+.hq-collections-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;align-items:start}
+.hq-collection-column{min-width:0;border:1px solid var(--line);border-radius:12px;background:#17241f;padding:12px}
+.hq-collection-heading{margin:0 0 12px;font-size:16px;display:flex;align-items:center;justify-content:space-between;gap:7px}
+.hq-collection-heading .count{font-size:12px;color:var(--muted)}
+.hq-mini-property{width:100%;display:block;text-align:left;cursor:pointer;background:#22342b;color:var(--text);border:1px solid #4b6454;border-radius:9px;padding:10px;margin-bottom:8px;transition:background .15s,border-color .15s}
+.hq-mini-property:hover,.hq-mini-property:focus-visible{background:#2b4637;border-color:#9ab58e}
+.hq-mini-top{display:flex;justify-content:space-between;gap:6px;align-items:start;font-size:13px;font-weight:750;overflow-wrap:anywhere}
+.hq-mini-price{color:#d5e6c7;font-weight:800;margin-top:5px;font-size:15px}
+.hq-mini-meta{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.45}
+.hq-mini-ranks{font-size:11px;color:#d7e0d4;margin-top:6px}
+.hq-mini-status{font-size:10px;color:#e9c67d;margin-top:4px}
+@media(max-width:850px){.hq-collections-grid{grid-template-columns:1fr}.hq-collection-column{padding:11px}}
+</style></style><style id="criterion-flames-styles">
 .flame-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:9px;padding:8px 10px;border-top:1px solid var(--line);font-size:12px}.flame-cycle,.flame-note-toggle{border:1px solid #80633b;border-radius:8px;background:#302b21;color:#f8e3ae;cursor:pointer;padding:5px 9px}.flame-cycle span{font-size:11px}.flame-partner{color:var(--muted)}.flame-note-editor{width:100%;flex-basis:100%}.flame-note-editor[hidden]{display:none}.flame-note-editor textarea{width:100%;min-height:55px;resize:vertical;margin-top:5px}.flame-other-note{flex-basis:100%;color:var(--muted);font-style:italic}.flame-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.flame-summary-column{min-width:0}.flame-summary-item{padding:9px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.flame-summary-item p{margin:4px 0 0 23px;color:var(--muted);font-size:13px}@media(max-width:700px){.flame-summary-grid{grid-template-columns:1fr}}
 </style>
 </head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="hq-header-content"><div class="hq-header-title"><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></div><div class="hq-header-data" role="group" aria-label="Data tools"><button class="btn" id="importResearch" type="button">📥 Import Val's Research</button><button class="btn" id="refreshResearch" type="button">🔎 Refresh All Research</button><button class="btn primary" id="export" type="button">Download JSON Backup</button></div></div></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <button class="btn hq-refresh-top" id="refreshDashboard" type="button">🔄 Refresh Dashboard</button>
@@ -590,6 +603,7 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
     <span class="hq-menu-label">Views</span>
     <button class="btn primary" id="showProperties" type="button">🏡 My Properties</button>
     <button class="btn" id="showWarCouncil" type="button">⚔️ War Council</button>
+    <button class="btn" id="showCollections" type="button">♥ Collections</button>
   </div>
   <div class="hq-menu-row" role="group" aria-label="Map and property actions">
     <span class="hq-menu-label">Explore</span>
@@ -617,6 +631,7 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
   <div class="hq-search-row"><input id="search" type="search" placeholder="Search address, town, features, notes…" aria-label="Search address and property details"></div>
 </div>
 
+<section id="collectionsPage" class="workspace-panel hidden" aria-label="Property collections overview"><div class="sectionbar"><h2>♥ Collections</h2><button class="btn" id="closeCollections" type="button">← Back to properties</button></div><p class="small">Favorites, serious inquiries, and price watches side by side. Select a property to open its full details. Rejected properties are excluded.</p><div id="collectionsColumns" class="hq-collections-grid"></div></section>
 <section id="propertyMapPage" class="hidden" aria-label="Lightweight regional property map"><div class="sectionbar"><h2>🗺️ Property Map</h2><button class="btn" id="closeMap" type="button">← Back to properties</button></div><div class="small">Interactive regional road map: zoom and drag to separate property markers. Nearby properties group into numbered clusters; click a cluster to zoom in. If the interactive map cannot load, HQ restores the previous static map. Coordinates are approximate, not legal boundaries.</div><div class="offline-map-legend"><span><i class="legend-dot watchlist"></i> Watchlist</span><span><i class="legend-dot favorite"></i> HQ Favorite</span><span><i class="legend-dot serious"></i> Serious Inquiry</span></div><div class="offline-map-toolbar"><button class="btn" id="offlineMapZoomOut" type="button" aria-label="Zoom out">−</button><button class="btn" id="offlineMapZoomIn" type="button" aria-label="Zoom in">＋</button><button class="btn" id="offlineMapReset" type="button">Show all properties</button><button class="btn primary" id="autoFindParcels" type="button">🔎 Auto-find missing parcels</button><label class="map-boundary-toggle"><input id="mapBoundaryToggle" type="checkbox"> Show parcel boundaries</label><span class="small" id="offlineMapZoomLabel">100%</span></div><div id="propertyMapCanvas" class="offline-map-canvas" aria-label="Central Texas map with interactive property locations"></div><div id="parcelBatchStatus" class="small" role="status" aria-live="polite"></div><div id="offlineMapSelection" class="offline-map-selection small" aria-live="polite">Select a pin to see property details. Listing status describes market availability, not pin accuracy.</div><p id="mapNeedsLocation" class="small"></p><div id="mapLocationFallback" class="small" aria-live="polite"></div></section><section id="warCouncil" class="workspace-panel hidden" aria-label="War Council">
   <div class="sectionbar">
     <h2>⚔️ The War Council</h2>
@@ -1634,11 +1649,26 @@ document.addEventListener('focusout',()=>{
  if(!hqRenderDeferredWhileEditing)return;
  setTimeout(()=>{if(!hqTextEditorActive() && hqRenderDeferredWhileEditing && !dirtyShared && !saveBusy){hqRenderDeferredWhileEditing=false;render()}},0);
 });
+function renderCollections(){
+ const root=$('collectionsColumns');if(!root||!ready)return;
+ const groups=[['Favorite','♥','Favorites'],['Serious inquiry','★','Serious Inquiries'],['Price Watch','$','Price Watches']];
+ const personRank=p=>rankOf(mine,p.id)??Number.MAX_SAFE_INTEGER;
+ const partnerRank=p=>rankOf(other,p.id)??Number.MAX_SAFE_INTEGER;
+ root.innerHTML=groups.map(([key,icon,label])=>{
+  const items=shared.filter(p=>(p.decision||'Active')!=='Rejected'&&hqClass(p)===key).sort((a,b)=>personRank(a)-personRank(b)||partnerRank(a)-partnerRank(b)||(a.price??Infinity)-(b.price??Infinity)||a.address.localeCompare(b.address));
+  const cards=items.map(p=>{
+   const r=me.uid===OWNER?rankOf(mine,p.id):rankOf(other,p.id),t=me.uid===OWNER?rankOf(other,p.id):rankOf(mine,p.id);
+   return `<button class="hq-mini-property" type="button" data-collection-open="${esc(p.id)}" aria-label="Open ${esc(p.address)} details"><div class="hq-mini-top"><span>${esc(p.address)}</span><span>${icon}</span></div><div class="hq-mini-meta">${esc(p.city)}, TX · ${fmt(p.acres)} ac · ${fmt(p.beds)} bd / ${fmt(p.baths)} ba</div><div class="hq-mini-price">${money(p.price)}</div><div class="hq-mini-ranks">Rich ${r===null?'—':'#'+r} · Tiffany ${t===null?'—':'#'+t}</div>${(p.decision||'Active')!=='Active'?`<div class="hq-mini-status">${esc(p.decision)}</div>`:''}</button>`;
+  }).join('');
+  return `<div class="hq-collection-column"><h3 class="hq-collection-heading"><span>${icon} ${label}</span><span class="count">${items.length}</span></h3>${cards||'<p class="small">No properties in this collection yet.</p>'}</div>`;
+ }).join('');
+ root.querySelectorAll('[data-collection-open]').forEach(b=>b.onclick=()=>openPropertyDetails(b.dataset.collectionOpen));
+}
 function render(){if(!ready)return;
  if(hqTextEditorActive()){hqRenderDeferredWhileEditing=true;return;}
 
  const openCardEvidence=new Set(Array.from(document.querySelectorAll('#cards [data-card-evidence]')).filter(node=>node.getAttribute('aria-expanded')==='true').map(node=>node.dataset.cardEvidence));
- renderWarCouncil();if(openPropertyId)renderPropertyDetails();let q=$('search').value.toLowerCase().trim(),g=$('group').value,d=$('decisionfilter').value,f=$('rankfilter').value;
+ renderWarCouncil();renderCollections();if(openPropertyId)renderPropertyDetails();let q=$('search').value.toLowerCase().trim(),g=$('group').value,d=$('decisionfilter').value,f=$('rankfilter').value;
  let list=shared.filter(p=>{let dec=p.decision||'Active';if(!(d==='all'?dec!=='Rejected':(d==='tracking'?dec==='Active':dec===d)))return false;if(g!=='all'&&!(['Watchlist','Favorite','Serious inquiry','Price Watch'].includes(g)?hqClass(p)===g:g==='New discovery'?discoveryPending(p):(p.groups||[]).includes(g)))return false;if(f==='mine-unranked'&&rankOf(mine,p.id)!==null)return false;if(f==='mine-ranked'&&rankOf(mine,p.id)===null)return false;if(f==='other-unranked'&&rankOf(other,p.id)!==null)return false;if(f==='other-ranked'&&rankOf(other,p.id)===null)return false;if(f==='both-ranked'&&combined(p.id)===null)return false;return[p.address,p.city,p.notes,p.risk,p.decisionReason,notesOf(mine,p.id),notesOf(other,p.id),...(p.features||[])].join(' ').toLowerCase().includes(q)});
  let s=$('sort').value, direction=$('sortDirection').value;
  const sortValue=p=>{
@@ -2243,7 +2273,7 @@ function restoreDetailReturnPosition() {
 function openPropertyDetails(id) {
   if(mapActive)closePropertyMap();
   if (!shared.some(p=>p.id===id)) return;
-  detailReturnView = currentView === 'council' ? 'council' : 'properties';
+  detailReturnView = ['council','collections'].includes(currentView) ? currentView : 'properties';
   captureDetailReturnPosition(id);
   openPropertyId = id;
   switchView('details');
@@ -2332,7 +2362,7 @@ function renderPropertyDetails() {
   const photos=Array.isArray(d.photos)?d.photos:[];
   root.innerHTML=`
     <div class="hq-detail-fixed"><div class="hq-detail-info">
-    <div class="details-top"><button class="btn" id="detailBack" type="button">← Back to ${detailReturnView==='council'?'War Council':'Properties'}</button>${p.decision&&p.decision!=='Active'?`<span class="tag">${esc(p.decision)}</span>`:''}<div class="hq-detail-rank-summary" aria-label="Property rankings"><div class="rankbox">Rich<strong>${rich===null?'—':'#'+rich}</strong></div><div class="rankbox">Tiffany<strong>${tiffany===null?'—':'#'+tiffany}</strong></div><div class="rankbox">Combined<strong>${combined(p.id)===null?'—':'#'+combined(p.id).toFixed(1)}</strong></div></div><span class="tag hq-detail-tier">${esc(councilTier(p.id))}</span>${councilTier(p.id)==='Unranked'?`<span class="hq-rank-wait-note">Tier updates once both Rich and Tiffany have ranked this property.</span>`:''}</div>
+    <div class="details-top"><button class="btn" id="detailBack" type="button">← Back to ${detailReturnView==='council'?'War Council':detailReturnView==='collections'?'Collections':'Properties'}</button>${p.decision&&p.decision!=='Active'?`<span class="tag">${esc(p.decision)}</span>`:''}<div class="hq-detail-rank-summary" aria-label="Property rankings"><div class="rankbox">Rich<strong>${rich===null?'—':'#'+rich}</strong></div><div class="rankbox">Tiffany<strong>${tiffany===null?'—':'#'+tiffany}</strong></div><div class="rankbox">Combined<strong>${combined(p.id)===null?'—':'#'+combined(p.id).toFixed(1)}</strong></div></div><span class="tag hq-detail-tier">${esc(councilTier(p.id))}</span>${councilTier(p.id)==='Unranked'?`<span class="hq-rank-wait-note">Tier updates once both Rich and Tiffany have ranked this property.</span>`:''}</div>
     <h2 style="font-size:clamp(25px,3vw,37px);margin:0">${esc(p.address)}</h2>${alertInfo(p)?`<button class="btn hq-detail-alert-trigger ${alertInfo(p).level==='critical'?'critical':'caution'}" type="button" id="detailAlertOpen">${alertInfo(p).level==='critical'?'Critical Alert':'Research Alert'}</button>`:p.researchAlert?.resolved?`<button class="btn hq-detail-alert-trigger resolved" type="button" id="detailAlertOpen">✓ Resolved Research Alert</button>`:''}
     <div class="city">${esc(p.city)}, Texas · ${esc(listingStatus(p))}</div>
     <p class="small">Research last checked: ${esc(p.researchLastChecked?new Date(p.researchLastChecked).toLocaleString():'Not recorded')}</p><div class="card-meta">${listingStatusLabel(p)}<span class="mini-chip">${esc(ageClocks(p))}</span><span class="mini-chip">${hoaSummary(p)}</span>${restrictionsSummary(p)}</div><div class="detail-meta"><strong>${money(p.price)}</strong><span>🌲 ${fmt(p.acres)} acres</span><span>${fmt(p.beds)} beds / ${fmt(p.baths)} baths</span><span>${fmt(p.sqft)} sq ft</span></div>
@@ -2355,7 +2385,7 @@ function renderPropertyDetails() {
     <details class="details-section"><summary>⚔️ War Council</summary><div class="details-body"><div class="rankgrid"><div class="rankbox">Rich<strong>${rich?'#'+rich:'—'}</strong></div><div class="rankbox">Tiffany<strong>${tiffany?'#'+tiffany:'—'}</strong></div><div class="rankbox">Combined<strong>${combined(p.id)===null?'—':'#'+combined(p.id).toFixed(1)}</strong></div></div><p class="small">Tier: ${esc(councilTier(p.id))}</p><label>My rank <input id="detailMyRank" class="rankinput" type="number" min="1" max="${shared.length}" value="${rankOf(mine,p.id)??''}" placeholder="Unranked"></label><button class="btn rankbtn direction" id="detailRankUp" type="button">↑ Top / Up</button><button class="btn rankbtn direction" id="detailRankDown" type="button">↓ Bottom / Down</button><button class="btn" type="button" id="detailClearRank">Clear rank</button>${discoveryTagged(p)?`<div class="reviewrow"><span class="small ${richReviewed(p)&&tiffanyReviewed(p)?'review-complete':'review-waiting'}">${esc(reviewStatus(p))} · Ranking counts as reviewed.</span><button class="btn" type="button" id="detailReviewed">${mine.reviewed?.[p.id]===true?'Undo my reviewed mark':'Mark reviewed / pass'}</button></div>`:''}</div></details>
     <details class="details-section"><summary>🔎 Research Discussion</summary><div class="details-body">${p.deepResearch?`<div id="detailResearchComments"><p class="small">Loading comments…</p></div><textarea id="detailResearchInput" maxlength="5000" placeholder="Share a research finding or question…"></textarea><button class="btn" id="detailPostComment" type="button">Post Comment</button>`:'<p class="small">Mark this property for Deep Research to enable shared comments.</p>'}</div></details>
     <details class="details-section"><summary>📸 Optional Serious-Contender Photos</summary><div class="details-body"><p class="detail-help">Optional direct image URLs with captions. No uploads or Firebase Storage setup required.</p><div class="details-photos">${photos.map((photo,i)=>`<div class="details-photo-item"><img src="${safeUrl(photo.url)}" alt="${esc(photo.caption||'Property photo')}" loading="lazy"><p class="small">${esc(photo.caption||'Property photo')}</p><button class="btn archive" type="button" data-remove-photo="${i}">Remove</button></div>`).join('')}</div><div class="details-fields"><label>Image URL<input id="detailPhotoUrl" type="url" placeholder="https://..."></label><label>Caption<input id="detailPhotoCaption" placeholder="Workshop, porch, guest house…"></label></div><button class="btn" id="detailAddPhoto" type="button">Add Photo URL</button></div></details>
-    <div class="detail-actions"><button class="btn" id="detailBackBottom" type="button">← Back to ${detailReturnView==='council'?'War Council':'Properties'}</button></div></div>`;
+    <div class="detail-actions"><button class="btn" id="detailBackBottom" type="button">← Back to ${detailReturnView==='council'?'War Council':detailReturnView==='collections'?'Collections':'Properties'}</button></div></div>`;
   root.dataset.renderedPropertyId=String(openPropertyId);
   if(openPanels){
     root.querySelectorAll('details.details-section').forEach((section,index)=>{
@@ -2425,26 +2455,31 @@ function switchView(view) {
   currentView = view;
 
   const showingCouncil = view === 'council';
+  const showingCollections = view === 'collections';
   const showingDetails = view === 'details';
   document.body.classList.toggle('hq-details-active', showingDetails);
   $('propertyDetails').classList.toggle('hidden', !showingDetails);
-  $('myPropertiesSection').classList.toggle('hidden', showingCouncil || showingDetails || mapActive);
+  $('myPropertiesSection').classList.toggle('hidden', showingCouncil || showingCollections || showingDetails || mapActive);
   $('showProperties').classList.toggle('primary', view === 'properties');
   $('showWarCouncil').classList.toggle('primary', showingCouncil);
+  $('showCollections').classList.toggle('primary', showingCollections);
+  $('collectionsPage').classList.toggle('hidden', !showingCollections);
 
   $('warCouncil').classList.toggle('hidden', !showingCouncil);
 
   
 
   // Hide the property grid and its heading while viewing the Council.
-  $('cards').classList.toggle('hidden', showingCouncil || showingDetails);
-  $('count').parentElement.classList.toggle('hidden', showingCouncil || showingDetails);
+  $('cards').classList.toggle('hidden', showingCouncil || showingCollections || showingDetails);
+  $('count').parentElement.classList.toggle('hidden', showingCouncil || showingCollections || showingDetails);
 
   // Keep the comparison panel out of the Council view.
-  $('comparepanel').classList.toggle('hidden', showingCouncil || showingDetails); if (!showingCouncil && !showingDetails) compare();
+  $('comparepanel').classList.toggle('hidden', showingCouncil || showingCollections || showingDetails); if (!showingCouncil && !showingCollections && !showingDetails) compare();
 
   if (showingCouncil) {
     renderWarCouncil();
+  } else if (showingCollections) {
+    renderCollections();
   } else if (showingDetails) {
     renderPropertyDetails();
   } else {
@@ -2672,6 +2707,8 @@ document.addEventListener('keydown',e=>{
 
 $('showProperties').onclick = () => {if(mapActive)closePropertyMap();openPropertyId=null;switchView('properties')};
 $('showWarCouncil').onclick = () => {if(mapActive)closePropertyMap();openPropertyId=null;switchView('council')};
+$('showCollections').onclick = () => {if(mapActive)closePropertyMap();openPropertyId=null;switchView('collections')};
+$('closeCollections').onclick = () => {openPropertyId=null;switchView('properties')};
 
 // Val's Research JSON v1: {format:"homestead-research-v1", properties:[{id?,address,city,...}]}.
 // This is deliberately not the full cloud backup format. Existing user decisions and personal records are protected.

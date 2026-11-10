@@ -1910,10 +1910,20 @@ const researchHTML = councilAccordion('Deep Research', '🔎', researchPropertie
   container.innerHTML = researchHTML + tiers.map(([tier, icon, description]) => {
     const properties = activeProperties
       .filter(p => councilTier(p.id) === tier)
-      .sort((a, b) =>
-        (combined(a.id) ?? Infinity) -
-        (combined(b.id) ?? Infinity)
-      );
+      .sort((a, b) => {
+        // Show the partner's ranked favorites first to guide the person who
+        // has not ranked them yet. Use own ranking only as a fallback.
+        if (tier === 'Unranked') {
+          const partnerA = rankOf(other, a.id) ?? Infinity;
+          const partnerB = rankOf(other, b.id) ?? Infinity;
+          if (partnerA !== partnerB) return partnerA - partnerB;
+          const ownA = rankOf(mine, a.id) ?? Infinity;
+          const ownB = rankOf(mine, b.id) ?? Infinity;
+          if (ownA !== ownB) return ownA - ownB;
+          return (a.address || '').localeCompare(b.address || '');
+        }
+        return (combined(a.id) ?? Infinity) - (combined(b.id) ?? Infinity);
+      });
 
     const propertyRows = properties.map(p => {
       const richRank = rankOf(

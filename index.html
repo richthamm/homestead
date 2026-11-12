@@ -3118,13 +3118,13 @@ $('researchFile').onchange=async e=>{
     // Transaction merges against latest cloud state, not an outdated browser snapshot.
     let committedMoves=[];
     await runTransaction(db,async tx=>{
-     const snap=await tx.get(sharedRef),current=snap.exists()?(snap.data().properties||[]):[];
+     const snap=await tx.get(sharedRef),current=snap.exists()?decodeSharedFromFirestore(snap.data().properties||[]):[];
      const freshPlan=planResearchImport(items,current);
      committedMoves=freshPlan.filter(x=>x.changes.some(c=>c==='Archived: confirmed sold'||c==='Restored: back on market')).map(x=>({address:x.address,action:x.changes.includes('Archived: confirmed sold')?'archived':'restored'}));
      const byId=new Map(freshPlan.filter(x=>x.type!=='unchanged').map(x=>[x.id,x.property]));
      const next=current.map(p=>byId.get(p.id)||p);
      for(const x of freshPlan)if(x.type==='new')next.push(x.property);
-     tx.set(sharedRef,{properties:next,updatedAt:new Date().toISOString()});
+     tx.set(sharedRef,{properties:encodeSharedForFirestore(next),updatedAt:new Date().toISOString()});
     });
     const archived=committedMoves.filter(x=>x.action==='archived'),restored=committedMoves.filter(x=>x.action==='restored');
     panel.innerHTML='<strong>✓ Research import saved to Firebase.</strong><p class="small">Updated shared research will appear as the cloud listener synchronizes. Personal evaluations were not modified.</p>'+(committedMoves.length?'<div class="hq-archive-notice"><strong>📦 '+archived.length+' sold properties moved to Archive · '+restored.length+' returned to market</strong><div>'+committedMoves.map(x=>'<p class="small">'+(x.action==='archived'?'Archived: ':'Restored: ')+esc(x.address)+'</p>').join('')+'</div><button type="button" class="btn" id="hqViewSoldArchive">View Property Archive</button></div>':'');

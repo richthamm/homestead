@@ -685,7 +685,7 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
 @media(max-width:700px){.hq-detail-toolbar{flex:none;max-height:25dvh;overflow-y:auto}.hq-detail-toolbar .detail-actions{gap:7px}.hq-detail-toolbar .btn{font-size:12px}.hq-detail-toolbar .hq-detail-class-picker select{min-width:105px}}
 </style>
 <style id="hq-v376-upper-pane-actions">
-/* v3.7.8: actions belong to the upper scrolling pane, not a third locked pane. */
+/* v3.7.10: actions belong to the upper scrolling pane, not a third locked pane. */
 .hq-detail-fixed>.hq-detail-toolbar{grid-column:1 / -1;min-width:0;width:100%;box-sizing:border-box}
 @media(max-width:900px){.hq-detail-fixed>.hq-detail-toolbar{order:3;align-self:stretch}}
 @media(max-width:700px){
@@ -696,6 +696,16 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
  .hq-detail-fixed>.hq-detail-toolbar .hq-detail-class-picker{display:flex;flex-direction:column;align-items:stretch;gap:4px;white-space:normal;min-width:0}
  .hq-detail-fixed>.hq-detail-toolbar .hq-detail-class-picker select{width:100%!important;min-width:0!important;max-width:none!important;margin:0;height:36px}
  .hq-detail-fixed>.hq-detail-toolbar .detail-actions>.btn{width:100%!important;min-width:0!important;min-height:38px;display:flex;align-items:center;justify-content:center;font-size:11px;text-align:center;padding:7px 5px}
+}
+</style>
+<style id="hq-v3710-tall-aerial">
+/* Desktop only: fill the unused vertical room in the image column without widening it. */
+@media(min-width:1101px){
+ .hq-detail-fixed>.hq-detail-media{align-self:stretch!important;height:100%!important;min-height:0!important}
+ .hq-detail-fixed>.hq-detail-media .hq-detail-photo{flex:0 0 auto!important}
+ .hq-detail-fixed>.hq-detail-media .hq-detail-aerial{flex:1 1 auto!important;min-height:165px!important;display:flex!important;flex-direction:column!important}
+ .hq-detail-fixed>.hq-detail-media .hq-detail-aerial .aerial-card{flex:1 1 auto!important;height:100%!important;min-height:165px!important;aspect-ratio:auto!important}
+ .hq-detail-fixed>.hq-detail-media .hq-detail-aerial .aerial-card .aerial-tag{left:6px!important;right:6px!important;bottom:5px!important;padding:3px 5px!important;font-size:10px!important;line-height:1.15!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
 }
 </style>
 <style id="hq-v378-compact-desktop">
@@ -733,7 +743,7 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
   max-height:150px!important;margin:0!important;
  }
  .hq-detail-fixed>.hq-detail-media .hq-detail-aerial .aerial-card{
-  height:108px!important;min-height:108px!important;
+  height:auto!important;min-height:0!important;aspect-ratio:1 / 1!important;
  }
  .hq-detail-fixed>.hq-detail-right{
   grid-column:3!important;grid-row:1!important;
@@ -761,7 +771,7 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
 }
 </style>
 </head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="hq-header-content"><div class="hq-header-title"><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></div><div class="hq-header-data" role="group" aria-label="Data tools"><button class="btn" id="importResearch" type="button">📥 Import Val's Research</button><button class="btn" id="refreshResearch" type="button">🔎 Refresh All Research</button><button class="btn primary" id="export" type="button">Download JSON Backup</button></div></div></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <button class="btn hq-refresh-top" id="refreshDashboard" type="button">🔄 Refresh Dashboard</button>
-     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.7.8     </span><span title="v3.7: Sold Archive, refresh notifications, lightweight main photo, mobile details scrolling, research pilot removed" style="font-size:11px;color:#d3e3d4">What’s new: Compact desktop three-column details; mobile two-pane scrolling retained</span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
+     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.7.10     </span><span title="v3.7: Sold Archive, refresh notifications, lightweight main photo, mobile details scrolling, research pilot removed" style="font-size:11px;color:#d3e3d4">What’s new: Compact desktop three-column details; mobile two-pane scrolling retained</span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
 <details id="hqDisclaimer" class="hq-disclaimer">
   <summary>⚠️ Data &amp; scoring notes <span class="small">Research and map limitations</span></summary>
   <div class="hq-disclaimer-body">Saved listings are research snapshots, not live verified listing data. Card previews use public Texas NAIP 2022 aerial imagery where available (USGS fallback) and saved approximate location pins; imagery dates and resolution vary. The all-property overview uses a free interactive map with clustered location markers, and falls back to the previous static USGS map if the interactive map fails. Parcel outlines appear for stored GIS polygons; on-demand GIS parcel lookups require confirmation before saving. Drive times can be calculated via the optional Google Maps Routes integration. Master auto-grades use only explicit facts that meet the current criterion rubric, not historical points or live listing scraping. Every auto-grade has an explanation beside its score. Two independent scoring lists are retained. Progress bars use the 49 master scored criteria only. Not Assessed criteria remain in the fixed maximum as unearned points, not proven deficiencies. Non-scored assessments never affect the percentage. Personal notes, ranks, and wishlist ratings are saved separately for each account. Both accounts start from identical evidence-based automatic scores. Shared property changes sync between both accounts. New Discoveries is a shared review queue: ranking or marking reviewed counts as your review, and a property leaves New Discoveries when both people finish. Shared rejection and On Hold remove a property from the active review queue. Newly imported properties enter New Discoveries automatically.</div>

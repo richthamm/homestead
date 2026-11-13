@@ -601,7 +601,7 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
  .hq-detail-toolbar .detail-actions>.btn{display:flex;align-items:center;justify-content:center;width:100%!important;min-width:0;min-height:38px;padding:7px 5px;font-size:11px;line-height:1.2;text-align:center;white-space:normal}
 }
 
-/* v3.7.11 — researched commutes; no browser API key needed */
+/* v3.7.12 — generic route estimates; no browser API key needed */
 .hq-commute-summary{font-weight:700;margin-bottom:12px}
 .hq-commute-row{display:grid;grid-template-columns:minmax(140px,1.3fr) minmax(120px,1fr) auto;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line,#444)}
 .hq-commute-pill{display:inline-block;border-radius:20px;padding:2px 9px;font-size:12px;margin-top:4px;background:#7773;color:inherit}
@@ -692,7 +692,7 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
 @media(max-width:700px){.hq-detail-toolbar{flex:none;max-height:25dvh;overflow-y:auto}.hq-detail-toolbar .detail-actions{gap:7px}.hq-detail-toolbar .btn{font-size:12px}.hq-detail-toolbar .hq-detail-class-picker select{min-width:105px}}
 </style>
 <style id="hq-v376-upper-pane-actions">
-/* v3.7.11: actions belong to the upper scrolling pane, not a third locked pane. */
+/* v3.7.12: actions belong to the upper scrolling pane, not a third locked pane. */
 .hq-detail-fixed>.hq-detail-toolbar{grid-column:1 / -1;min-width:0;width:100%;box-sizing:border-box}
 @media(max-width:900px){.hq-detail-fixed>.hq-detail-toolbar{order:3;align-self:stretch}}
 @media(max-width:700px){
@@ -778,7 +778,7 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
 }
 </style>
 </head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="hq-header-content"><div class="hq-header-title"><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></div><div class="hq-header-data" role="group" aria-label="Data tools"><button class="btn" id="importResearch" type="button">📥 Import Val's Research</button><button class="btn" id="refreshResearch" type="button">🔎 Refresh All Research</button><button class="btn primary" id="export" type="button">Download JSON Backup</button></div></div></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <button class="btn hq-refresh-top" id="refreshDashboard" type="button">🔄 Refresh Dashboard</button>
-     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.7.11     </span><span title="v3.7: Sold Archive, refresh notifications, lightweight main photo, mobile details scrolling, research pilot removed" style="font-size:11px;color:#d3e3d4">What’s new: Compact desktop three-column details; mobile two-pane scrolling retained</span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
+     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.7.12     </span><span title="v3.7: Sold Archive, refresh notifications, lightweight main photo, mobile details scrolling, research pilot removed" style="font-size:11px;color:#d3e3d4">What’s new: Compact desktop three-column details; mobile two-pane scrolling retained</span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
 <details id="hqDisclaimer" class="hq-disclaimer">
   <summary>⚠️ Data &amp; scoring notes <span class="small">Research and map limitations</span></summary>
   <div class="hq-disclaimer-body">Saved listings are research snapshots, not live verified listing data. Card previews use public Texas NAIP 2022 aerial imagery where available (USGS fallback) and saved approximate location pins; imagery dates and resolution vary. The all-property overview uses a free interactive map with clustered location markers, and falls back to the previous static USGS map if the interactive map fails. Parcel outlines appear for stored GIS polygons; on-demand GIS parcel lookups require confirmation before saving. Drive times can be calculated via the optional Google Maps Routes integration. Master auto-grades use only explicit facts that meet the current criterion rubric, not historical points or live listing scraping. Every auto-grade has an explanation beside its score. Two independent scoring lists are retained. Progress bars use the 49 master scored criteria only. Not Assessed criteria remain in the fixed maximum as unearned points, not proven deficiencies. Non-scored assessments never affect the percentage. Personal notes, ranks, and wishlist ratings are saved separately for each account. Both accounts start from identical evidence-based automatic scores. Shared property changes sync between both accounts. New Discoveries is a shared review queue: ranking or marking reviewed counts as your review, and a property leaves New Discoveries when both people finish. Shared rejection and On Hold remove a property from the active review queue. Newly imported properties enter New Discoveries automatically.</div>
@@ -1819,28 +1819,34 @@ async function autoFindMissingParcels(){
  }finally{parcelBatchRunning=false;if(button)button.disabled=false}
 }
 
+function commuteRecord(trips,key){
+ const aliases={audieMurphyVA:['audieMurphy','sanAntonioVA','audieMurphyHospital','audieLMurphyVA','audieLMurphyHospital','sanAntonio','audie_murphy_va'],kerrvilleVA:['kerrvilleVa','kerrvilleHospital'],fredericksburg:['fredericksburgTX','fredericksburgTown']};
+ const names=[key,...(aliases[key]||[])];
+ const found=names.map(k=>trips[k]).filter(x=>x&&typeof x==='object');
+ return found.find(x=>routeFinite(x.minutes)&&routeFinite(x.miles))||found[0]||{};
+}
 function commuteGrade(x){
- if(!credibleRoute(x))return ['unverified','Unverified'];
+ if(!routeFinite(x.minutes)||!routeFinite(x.miles))return ['unverified','No route saved'];
  const minutes=Math.round(x.minutes);
  return minutes<=60?['good','Within 60 min']:minutes<=65?['near','A few minutes over']:['long','Over 65 min'];
 }
 function tripSection(p){
  const trips=p.travelTimes||{};
- // Preserve older imported keys, but only count our three current destinations.
- const aliases={audieMurphyVA:['audieMurphy','sanAntonioVA','audieMurphyHospital'],kerrvilleVA:['kerrvilleVa','kerrvilleHospital']};
  const rows=ROUTE_DESTINATIONS.map(([key,label,target])=>{
-  const x=trips[key]||((aliases[key]||[]).map(k=>trips[k]).find(Boolean))||{};
-  const [grade,description]=commuteGrade(x);
-  const origin=p.address+', '+p.city+', TX';
-  const directions=routeDirectionsLink(p,target);
-  const source=String(x.sourceUrl||'');
+  const x=commuteRecord(trips,key);
+  const hasEstimate=routeFinite(x.minutes)&&routeFinite(x.miles);
   const verified=credibleRoute(x);
-  return `<div class="hq-commute-row"><div><strong>${esc(label)}</strong><div class="small">${verified?esc(String(x.verifiedAt).slice(0,10))+' · '+esc(x.source||'Route research'):'Awaiting verified route research'}</div></div><div><strong>${verified?Math.round(x.minutes)+' min':'—'}</strong> · ${verified?x.miles+' mi':'— mi'}<div><span class="hq-commute-pill ${grade}">${description}</span></div></div><div><a href="${safeUrl(directions)}" target="_blank" rel="noopener noreferrer">Directions ↗</a>${verified&&source.startsWith('https://')?' · <a href="'+safeUrl(source)+'" target="_blank" rel="noopener noreferrer">Source ↗</a>':''}</div></div>`;
+  const [grade,description]=commuteGrade(x);
+  const directions=routeDirectionsLink(p,target);
+  const source=String(x.sourceUrl||x.source||'');
+  const provenance=verified?'Verified '+String(x.verifiedAt).slice(0,10):hasEstimate?'Saved estimate · source not verified':'No saved route estimate';
+  return `<div class="hq-commute-row"><div><strong>${esc(label)}</strong><div class="small">${esc(provenance)}</div></div><div><strong>${hasEstimate?Math.round(x.minutes)+' min':'—'}</strong> · ${hasEstimate?x.miles+' mi':'— mi'}<div><span class="hq-commute-pill ${grade}">${esc(description)}</span></div></div><div><a href="${safeUrl(directions)}" target="_blank" rel="noopener noreferrer">Get standard route ↗</a>${verified&&source.startsWith('https://')?' · <a href="'+safeUrl(source)+'" target="_blank" rel="noopener noreferrer">Source ↗</a>':''}</div></div>`;
  });
- const verified=ROUTE_DESTINATIONS.map(([key])=>trips[key]||((aliases[key]||[]).map(k=>trips[k]).find(Boolean))).filter(credibleRoute);
- const inRange=verified.filter(x=>x.minutes<=65).length;
- const summary=verified.length===3?`${inRange} of 3 destinations within approximately 65 minutes`:`${verified.length} of 3 routes verified · ${inRange} currently within approximately 65 minutes`;
- return `<div class="hq-commute-summary">${esc(summary)}</div>${rows.join('')}<p class="small">Target: at least 2 of 3 within roughly one hour (up to 65 minutes acceptable). Saved estimates only, not live traffic. Updated by verified research JSON imports; no paid API key needed.</p>`;
+ const records=ROUTE_DESTINATIONS.map(([key])=>commuteRecord(trips,key));
+ const available=records.filter(x=>routeFinite(x.minutes)&&routeFinite(x.miles));
+ const inRange=available.filter(x=>x.minutes<=65).length;
+ const summary=available.length===3?`${inRange} of 3 destinations within approximately 65 minutes`:`${available.length} of 3 route estimates available · ${inRange} within approximately 65 minutes`;
+ return `<div class="hq-commute-summary">${esc(summary)}</div>${rows.join('')}<p class="small">Standard driving distance/time estimates, not traffic-adjusted or live. Existing saved estimates display even if their sources are not fully verified. Missing routes need a research import; the Directions links open a standard route for manual reference. No paid mapping API required.</p>`;
 }
 // Preserve the active editor while cloud autosave and snapshot listeners run.
 // A full render replaces textarea nodes and would otherwise discard focus/caret.

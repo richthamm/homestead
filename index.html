@@ -784,8 +784,22 @@ header .hq-header-data .btn{font-size:12px;padding:7px 11px;min-height:34px;text
  .hq-detail-fixed>.hq-detail-toolbar{grid-column:1 / -1!important}
 }
 </style>
+
+<style id="hq-quick-assessment-comments">
+.hq-quick-criterion{position:relative;display:grid;grid-template-columns:minmax(130px,1fr) auto minmax(120px,1fr) auto;gap:8px;align-items:center}
+.hq-quick-icons{display:inline-flex;align-items:center;gap:5px;position:relative}
+.hq-quick-icon{border:1px solid #526d5e;background:#24392e;color:#f5e5bb;border-radius:6px;cursor:pointer;padding:4px 7px;font-size:14px}
+.hq-quick-tip{display:none;position:absolute;right:0;top:100%;z-index:25;width:min(340px,75vw);max-height:180px;overflow:auto;padding:10px;background:#14251e;border:1px solid #8ca28b;border-radius:8px;box-shadow:0 8px 20px #000a;white-space:pre-wrap;overflow-wrap:anywhere}
+.hq-quick-icon:hover + .hq-quick-tip,.hq-quick-icon:focus + .hq-quick-tip,.hq-quick-icon.hq-quick-tip-open + .hq-quick-tip{display:block}
+.hq-quick-flame-editor{grid-column:1/-1;padding:10px;border:1px solid #536d5c;border-radius:8px;background:#20352a}
+.hq-quick-flame-editor[hidden]{display:none}
+.hq-quick-flame-summary{margin-bottom:6px;font-size:12px}
+.hq-quick-flame-editor label{display:block;margin-top:9px;font-size:12px}
+.hq-quick-flame-editor textarea{width:100%;min-height:62px;margin-top:5px;resize:vertical}
+@media(max-width:650px){.hq-quick-criterion{grid-template-columns:minmax(0,1fr) auto auto}.hq-quick-criterion .card-grade-description{grid-column:1/-1;grid-row:2}.hq-quick-criterion .hq-quick-icons{grid-column:3;grid-row:1}}
+</style>
 </head><body><div id="cloudgate" style="position:fixed;inset:0;z-index:999;background:#101716;color:#eef2eb;display:flex;align-items:center;justify-content:center;padding:20px"><div style="max-width:540px;background:#1b2624;padding:30px;border:1px solid #52725e;border-radius:14px"><h2>Hill Country Homestead HQ</h2><p id="gateMessage">Connecting securely…</p><div id="gateActions"></div></div></div><header><div class="hq-header-content"><div class="hq-header-title"><div class="eyebrow">Private property headquarters · two-person edition</div><h1>Hill Country<br>Homestead HQ</h1><p>One shared watchlist. Two independent opinions. A future village built together.</p></div><div class="hq-header-data" role="group" aria-label="Data tools"><button class="btn" id="importResearch" type="button">📥 Import Val's Research</button><button class="btn" id="refreshResearch" type="button">🔎 Refresh All Research</button><button class="btn primary" id="export" type="button">Download JSON Backup</button></div></div></header><main class="shell"><div class="memberbar">   <span id="identity"></span>   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">     <button class="btn hq-refresh-top" id="refreshDashboard" type="button">🔄 Refresh Dashboard</button>
-     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.7.14     </span><span title="v3.7: Sold Archive, refresh notifications, lightweight main photo, mobile details scrolling, research pilot removed" style="font-size:11px;color:#d3e3d4">What’s new: Lackland commute display restored; HOA colors retained</span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
+     <span style="background:#344a3d;color:#d7eab9;border:1px solid #78917d;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700">       ⚔️ Homestead HQ · v3.7.15     </span><span title="v3.7: Sold Archive, refresh notifications, lightweight main photo, mobile details scrolling, research pilot removed" style="font-size:11px;color:#d3e3d4">What’s new: card assessment comments and flame editing; Lackland retained</span>     <button class="btn" id="logout">Sign out</button>   </div> </div><div id="admin" class="admin hidden"></div>
 <details id="hqDisclaimer" class="hq-disclaimer">
   <summary>⚠️ Data &amp; scoring notes <span class="small">Research and map limitations</span></summary>
   <div class="hq-disclaimer-body">Saved listings are research snapshots, not live verified listing data. Card previews use public Texas NAIP 2022 aerial imagery where available (USGS fallback) and saved approximate location pins; imagery dates and resolution vary. The all-property overview uses a free interactive map with clustered location markers, and falls back to the previous static USGS map if the interactive map fails. Parcel outlines appear for stored GIS polygons; on-demand GIS parcel lookups require confirmation before saving. Drive times can be calculated via the optional Google Maps Routes integration. Master auto-grades use only explicit facts that meet the current criterion rubric, not historical points or live listing scraping. Every auto-grade has an explanation beside its score. Two independent scoring lists are retained. Progress bars use the 49 master scored criteria only. Not Assessed criteria remain in the fixed maximum as unearned points, not proven deficiencies. Non-scored assessments never affect the percentage. Personal notes, ranks, and wishlist ratings are saved separately for each account. Both accounts start from identical evidence-based automatic scores. Shared property changes sync between both accounts. New Discoveries is a shared review queue: ranking or marking reviewed counts as your review, and a property leaves New Discoveries when both people finish. Shared rejection and On Hold remove a property from the active review queue. Newly imported properties enter New Discoveries automatically.</div>
@@ -2001,7 +2015,7 @@ function render(){if(!ready)return;
    const closeBtn=document.createElement('button');closeBtn.type='button';closeBtn.className='btn hq-grade-popover-close';closeBtn.textContent='✕ Close';
    head.append(title,closeBtn);popup.append(head);
    const parent=panel.parentNode,after=panel.nextSibling;
-   panel.hidden=false;popup.appendChild(panel);document.body.append(backdrop,popup);document.body.classList.add('hq-grade-dialog-open');popup.scrollTop=0;
+   panel.hidden=false;popup.appendChild(panel);wireQuickAssessment(panel,shared.find(p=>p.id===button.dataset.cardEvidence.split(':')[0]));document.body.append(backdrop,popup);document.body.classList.add('hq-grade-dialog-open');popup.scrollTop=0;
    button.setAttribute('aria-expanded','true');
    function close(){if(!popup.isConnected)return;if(after&&after.parentNode===parent)parent.insertBefore(panel,after);else if(parent.isConnected)parent.appendChild(panel);panel.hidden=true;popup.remove();backdrop.remove();document.body.classList.remove('hq-grade-dialog-open');button.setAttribute('aria-expanded','false');document.removeEventListener('keydown',onKey)}
    function onKey(e){if(e.key==='Escape')close()}
@@ -2416,14 +2430,58 @@ const criterionByKey = Object.fromEntries(scoredCriteria.map(c=>[c.key,c]));
 // Card-only read-only summary: labels and grades, with manual values highlighted.
 // Evidence details, automatic sources, and the edit controls remain in Property Details.
 function wishlistEvidenceCard(p, openCardEvidence){
+  // A compact summary: scored criteria plus any criterion carrying a shared
+  // comment or either person's flame/highlight note.
   const entries=wishlistFeatures.map(([key,label])=>{
     const auto=automaticWishlist(p,key);
     const override=ratingOverride(myRatings,p,key);
-    if(auto.value===null&&override===null)return null;
-    return {key,label,grade:override===null?auto.value:override,overridden:override!==null};
+    const grade=override===null?auto.value:override;
+    const comment=String(p.assessmentComments?.[key]||'').trim();
+    const own=flameData(mine,p.id,key),partner=flameData(other,p.id,key);
+    if(grade===null&&!comment&&!own.level&&!own.note.trim()&&!partner.level&&!partner.note.trim())return null;
+    return {key,label,grade,overridden:override!==null,comment,own,partner};
   }).filter(Boolean);
-  const content=entries.length?entries.map(e=>`<div class="wishlist-evidence-row"><span class="wishlist-feature-name">${esc(e.label)}</span><span class="wishlist-evidence-score${e.overridden?' overridden':''}" title="${e.overridden?'My manual rating':'Automatic grade'}">${e.grade}/5</span><span class="card-grade-description">${esc(masterGradeDescription(criterionByKey[e.key],e.grade))}</span></div>`).join(''):'<p class="card-evidence-empty">No master criteria scored yet.</p>';
-  return `<div class="card-evidence-panel" id="card-wishlist-${esc(p.id)}" data-evidence-panel="${esc(p.id)}:wishlist" ${openCardEvidence.has(p.id+':wishlist')?'':'hidden'}><div class="card-evidence-heading">Master grades · ${entries.length} rated</div><div class="card-grade-legend"><span class="card-grade-origin auto">AUTO</span> Evidence-based grade <span class="card-grade-origin manual">MANUAL</span> Your override</div>${content}</div>`;
+  const rows=entries.map(e=>{
+    const hasFlame=e.own.level||e.own.note.trim()||e.partner.level||e.partner.note.trim();
+    const ownName=me.uid===OWNER?'Rich':'Tiffany',partnerName=me.uid===OWNER?'Tiffany':'Rich';
+    return `<div class="wishlist-evidence-row hq-quick-criterion">
+      <span class="wishlist-feature-name">${esc(e.label)}</span>
+      <span class="wishlist-evidence-score${e.overridden?' overridden':''}">${e.grade===null?'Not Assessed':e.grade+'/5'}</span>
+      <span class="card-grade-description">${e.grade===null?'Comment / highlight only':esc(masterGradeDescription(criterionByKey[e.key],e.grade))}</span>
+      <span class="hq-quick-icons">
+        ${e.comment?`<button type="button" class="hq-quick-icon" data-quick-comment title="${esc(e.comment)}" aria-label="Read general comment for ${esc(e.label)}">💬</button><span class="hq-quick-tip" role="tooltip">${esc(e.comment)}</span>`:''}
+        <button type="button" class="hq-quick-icon hq-quick-flame" data-quick-flame="${esc(e.key)}" title="${esc((e.own.note||e.partner.note||'Add or edit your flame highlight'))}" aria-label="Edit your flame highlight for ${esc(e.label)}">${e.own.level?'🔥'.repeat(e.own.level):hasFlame?'🔥':'♢'}</button>
+      </span>
+      <div class="hq-quick-flame-editor" data-quick-editor="${esc(e.key)}" hidden>
+        <div class="hq-quick-flame-summary"><strong>${esc(ownName)}:</strong> <span data-quick-own-level="${esc(e.key)}">${e.own.level?'🔥'.repeat(e.own.level):'No flames'}</span>${e.own.note?` · ${esc(e.own.note)}`:''}</div>
+        <div class="hq-quick-flame-summary"><strong>${esc(partnerName)}:</strong> ${e.partner.level?'🔥'.repeat(e.partner.level):'No flames'}${e.partner.note?` · ${esc(e.partner.note)}`:''}</div>
+        <button type="button" class="btn" data-quick-cycle="${esc(e.key)}">Change my flame level (0–2)</button>
+        <label>My flame comment <textarea maxlength="250" rows="2" data-quick-note="${esc(e.key)}" placeholder="Add your reason…">${esc(e.own.note)}</textarea></label>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="card-evidence-panel" id="card-wishlist-${esc(p.id)}" data-evidence-panel="${esc(p.id)}:wishlist" ${openCardEvidence.has(p.id+':wishlist')?'':'hidden'}><div class="card-evidence-heading">Master grades · ${entries.filter(e=>e.grade!==null).length} rated · ${entries.length} shown</div><div class="card-grade-legend"><span class="card-grade-origin auto">AUTO</span> Evidence-based grade <span class="card-grade-origin manual">MANUAL</span> Your override</div>${rows||'<p class="card-evidence-empty">No grades, comments, or flames yet.</p>'}</div>`;
+}
+function wireQuickAssessment(panel,p){
+  panel.addEventListener('click',e=>{
+    const comment=e.target.closest('[data-quick-comment]');
+    if(comment){comment.classList.toggle('hq-quick-tip-open');return;}
+    const flame=e.target.closest('[data-quick-flame]');
+    if(flame){const editor=panel.querySelector('[data-quick-editor="'+flame.dataset.quickFlame+'"]');if(editor)editor.hidden=!editor.hidden;return;}
+    const cycle=e.target.closest('[data-quick-cycle]');
+    if(cycle){
+      const key=cycle.dataset.quickCycle,level=(flameData(mine,p.id,key).level+1)%3;
+      updateFlame(p.id,key,{level});
+      const label=panel.querySelector('[data-quick-own-level="'+key+'"]');
+      if(label)label.textContent=level?'🔥'.repeat(level):'No flames';
+      const icon=panel.querySelector('[data-quick-flame="'+key+'"]');
+      if(icon)icon.textContent=level?'🔥'.repeat(level):'♢';
+    }
+  });
+  panel.addEventListener('input',e=>{
+    const field=e.target.closest('[data-quick-note]');
+    if(field)updateFlame(p.id,field.dataset.quickNote,{note:field.value.slice(0,250)});
+  });
 }
 // These are the 45 scored topics from the ORIGINAL wishlist (not dynamically derived
 // from existing evidence, which would make the denominator change as research grows).

@@ -3627,4 +3627,72 @@ function renderDreamPreview(){
 function toggleDreamPreview(show){const page=document.getElementById('dreamBigPreview');if(!page)return;page.classList.toggle('hidden',!show);document.getElementById('myPropertiesSection')?.classList.toggle('hidden',show);if(show){document.getElementById('collectionsPage')?.classList.add('hidden');document.getElementById('propertyDetails')?.classList.add('hidden');renderDreamPreview();page.scrollIntoView({block:'start'});}else{document.getElementById('myPropertiesSection')?.scrollIntoView({block:'start'});}}
 document.getElementById('dreamOpen')?.addEventListener('click',()=>toggleDreamPreview(true));document.getElementById('dreamBack')?.addEventListener('click',()=>toggleDreamPreview(false));
 document.getElementById('dreamSearch')?.addEventListener('input',renderDreamPreview);document.getElementById('dreamFilter')?.addEventListener('change',renderDreamPreview);document.getElementById('dreamSort')?.addEventListener('change',renderDreamPreview);
+</script><script>
+/* v3.7.34: Display-only resolution upgrade. No Firestore writes or import changes.
+   Probe alternate sizes in the visitor's browser; accept only genuinely larger loaded images.
+   Never replace manually chosen photos (photoManual). Original URL remains fallback. */
+(()=>{
+ const tested=new Map();
+ const smallRe=/^(https:\/\/ap\.rdcpix\.com\/[^?#]*?)(s)(\.jpe?g)([?#].*)?$/i;
+ function getPhotoRecord(img){
+   const card=img.closest('article.card');
+   if(card){
+     const id=card.querySelector('[data-photo]')?.getAttribute('data-photo');
+     if(id && typeof shared!=='undefined')return shared.find(p=>p.id===id);
+   }
+   if(typeof shared!=='undefined'){
+     const u=img.getAttribute('src');
+     return shared.find(p=>p.photoUrl===u);
+   }
+   return null;
+ }
+ function probe(url){
+   if(tested.has(url))return tested.get(url);
+   const m=url.match(smallRe);
+   if(!m)return Promise.resolve(null);
+   const promise=(async()=>{
+     // Alternate image variants are only candidates, never assumed valid.
+     for(const variant of ['od','l','x']){
+       const candidate=m[1]+variant+m[3]+(m[4]||'');
+       const result=await new Promise(resolve=>{
+         const test=new Image();
+         const timer=setTimeout(()=>{test.onload=test.onerror=null;resolve(null)},4500);
+         test.onload=()=>{clearTimeout(timer);resolve(test.naturalWidth>=900 && test.naturalHeight>=500?candidate:null)};
+         test.onerror=()=>{clearTimeout(timer);resolve(null)};
+         test.referrerPolicy='no-referrer';test.src=candidate;
+       });
+       if(result)return result;
+     }
+     return null;
+   })();
+   tested.set(url,promise);return promise;
+ }
+ function upgrade(img){
+   if(img.dataset.hqResolutionChecked)return;
+   const url=img.getAttribute('src')||'';
+   if(!smallRe.test(url))return;
+   const p=getPhotoRecord(img);
+   if(p?.photoManual)return;
+   img.dataset.hqResolutionChecked='1';
+   probe(url).then(better=>{
+     if(!better||!img.isConnected||img.getAttribute('src')!==url)return;
+     // The original remains stored in HQ and will be restored on load failure.
+     img.addEventListener('error',()=>{img.src=url;img.style.display=''}, {once:true});
+     img.src=better;
+   });
+ }
+ function scan(node){
+   if(node.nodeType!==1)return;
+   if(node.matches?.('img.propertyphoto, .hq-detail-photo img'))upgrade(node);
+   node.querySelectorAll?.('img.propertyphoto, .hq-detail-photo img').forEach(upgrade);
+ }
+ const observer=new MutationObserver(records=>{
+   for(const r of records){
+     for(const node of r.addedNodes)scan(node);
+     if(r.type==='attributes')scan(r.target);
+   }
+ });
+ observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['src']});
+ scan(document.documentElement);
+})();
 </script></body></html>
